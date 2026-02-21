@@ -8,6 +8,7 @@
   <h1>Genesys OAuth PKCE</h1>
 
   <button id="loginBtn">Login</button>
+  <button id="logoutBtn">Logout</button>
 
   <pre id="debug" style="white-space:pre-wrap;background:#111;color:#0f0;padding:10px;border-radius:6px;"></pre>
 
@@ -20,9 +21,46 @@
     const apiBase  = `https://api.${region}`;
     const debugEl  = document.getElementById("debug");
 
+    // Storage keys
+    const K_ACCESS_TOKEN = "gc_access_token";
+    const K_EXPIRES_AT   = "gc_expires_at";   // epoch ms
+    const K_PKCE_VERIFIER = "pkce_verifier";
+    const K_OAUTH_STATE   = "oauth_state";
+
+    // Safety skew so we don't use a token that's about to expire
+    const EXPIRY_SKEW_MS = 60 * 1000;
+
     function qp() { return new URLSearchParams(window.location.search); }
     function clearQuery() {
       history.replaceState({}, document.title, location.origin + location.pathname);
+    }
+
+    function setToken(token) {
+      const expiresAt = Date.now() + (token.expires_in * 1000);
+      sessionStorage.setItem(K_ACCESS_TOKEN, token.access_token);
+      sessionStorage.setItem(K_EXPIRES_AT, String(expiresAt));
+    }
+
+    function getValidAccessToken() {
+      const accessToken = sessionStorage.getItem(K_ACCESS_TOKEN);
+      const expiresAtStr = sessionStorage.getItem(K_EXPIRES_AT);
+
+      if (!accessToken || !expiresAtStr) return null;
+
+      const expiresAt = Number(expiresAtStr);
+      if (!Number.isFinite(expiresAt)) return null;
+
+      // token must be valid for at least the skew window
+      if (Date.now() >= (expiresAt - EXPIRY_SKEW_MS)) return null;
+
+      return accessToken;
+    }
+
+    function clearAuthSession() {
+      sessionStorage.removeItem(K_ACCESS_TOKEN);
+      sessionStorage.removeItem(K_EXPIRES_AT);
+      sessionStorage.removeItem(K_PKCE_VERIFIER);
+      sessionStorage.removeItem(K_OAUTH_STATE);
     }
 
     // --- PKCE helpers ---
@@ -46,7 +84,7 @@
     }
 
     async function exchangeCodeForToken(code) {
-      const verifier = sessionStorage.getItem("pkce_verifier");
+      const verifier = sessionStorage.getItem(K_PKCE_VERIFIER);
       if (!verifier) throw new Error("Missing pkce_verifier (click Login again).");
 
       const body = new URLSearchParams({
@@ -65,7 +103,7 @@
 
       const json = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(`Token exchange failed (${resp.status}): ${JSON.stringify(json)}`);
-      return json;
+      return json; // {access_token, expires_in, token_type, ...}
     }
 
     async function usersMe(accessToken) {
@@ -77,15 +115,23 @@
       return json;
     }
 
-    // --- Button wiring (this is the part that often is missing) ---
+    async function showMe(accessToken, note) {
+      debugEl.textContent = (note ? note + "\n\n" : "") + "Calling /api/v2/users/me...\n";
+      const me = await usersMe(accessToken);
+      debugEl.textContent +=
+        "✅ /users/me OK\n\n" +
+        JSON.stringify({ id: me.id, name: me.name, email: me.email }, null, 2);
+    }
+
+    // --- Button wiring ---
     document.getElementById("loginBtn").addEventListener("click", async () => {
       debugEl.textContent = "Starting login...\n";
 
       const { verifier, challenge } = await buildPkce();
       const state = base64UrlEncode(randomBytes(16));
 
-      sessionStorage.setItem("pkce_verifier", verifier);
-      sessionStorage.setItem("oauth_state", state);
+      sessionStorage.setItem(K_PKCE_VERIFIER, verifier);
+      sessionStorage.setItem(K_OAUTH_STATE, state);
 
       const authUrl =
         `https://login.${region}/oauth/authorize` +
@@ -100,42 +146,60 @@
       window.location.href = authUrl;
     });
 
-    // --- If we returned with code/state, exchange automatically ---
+    document.getElementById("logoutBtn").addEventListener("click", async () => {
+      clearAuthSession();
+      clearQuery();
+      debugEl.textContent = "Logged out (local session cleared). Click Login.\n";
+    });
+
+    // --- Startup logic ---
     (async () => {
+      // 1) If we already have a valid token, just use it (no re-auth on refresh)
+      const existing = getValidAccessToken();
+      if (existing) {
+        try {
+          await showMe(existing, "✅ Reusing existing access token (no login needed).");
+          return;
+        } catch (e) {
+          // Token might be revoked/invalid; clear and fall back to login
+          clearAuthSession();
+          debugEl.textContent = "Existing token failed; please login again.\n\n❌ " + e.message;
+          return;
+        }
+      }
+
+      // 2) If we returned from authorize with code/state, exchange it once
       const p = qp();
-      if (!p.has("code")) {
-        debugEl.textContent = "Ready. Click Login.\n";
+      if (p.has("code")) {
+        const code = p.get("code");
+        const returnedState = p.get("state") || "";
+        const expectedState = sessionStorage.getItem(K_OAUTH_STATE) || "";
+
+        if (!expectedState || returnedState !== expectedState) {
+          debugEl.textContent =
+            `State check failed.\nexpected=${expectedState}\nreturned=${returnedState}\n`;
+          return;
+        }
+
+        debugEl.textContent = "Exchanging code for token...\n";
+        try {
+          const token = await exchangeCodeForToken(code);
+
+          // Persist token so refresh doesn't require login
+          setToken(token);
+
+          // prevent re-exchanging if you refresh
+          clearQuery();
+
+          await showMe(token.access_token, "✅ Token OK (saved in sessionStorage).");
+        } catch (e) {
+          debugEl.textContent = "❌ " + e.message;
+        }
         return;
       }
 
-      const code = p.get("code");
-      const returnedState = p.get("state") || "";
-      const expectedState = sessionStorage.getItem("oauth_state") || "";
-
-      if (!expectedState || returnedState !== expectedState) {
-        debugEl.textContent = `State check failed.\nexpected=${expectedState}\nreturned=${returnedState}\n`;
-        return;
-      }
-
-      debugEl.textContent = "Exchanging code for token...\n";
-      try {
-        const token = await exchangeCodeForToken(code);
-        clearQuery();
-
-        debugEl.textContent =
-          "✅ Token OK\n" +
-          `expires_in: ${token.expires_in}\n` +
-          `access_token: ${String(token.access_token).slice(0, 30)}...\n\n` +
-          "Calling /api/v2/users/me...\n";
-
-        const me = await usersMe(token.access_token);
-
-        debugEl.textContent +=
-          "✅ /users/me OK\n\n" +
-          JSON.stringify({ id: me.id, name: me.name, email: me.email }, null, 2);
-      } catch (e) {
-        debugEl.textContent = "❌ " + e.message;
-      }
+      // 3) Otherwise, show login prompt
+      debugEl.textContent = "Ready. Click Login.\n";
     })();
   </script>
 </body>
