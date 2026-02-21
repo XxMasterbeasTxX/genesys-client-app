@@ -2,18 +2,12 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Genesys OAuth Test</title>
+  <title>Genesys OAuth PKCE Test</title>
 </head>
 <body>
-  <h1>Genesys OAuth Test</h1>
+  <h1>Genesys OAuth PKCE Test</h1>
 
-  <p>
-    <button id="buildBtn">Build login link</button>
-  </p>
-
-  <p>
-    <a id="loginLink" href="#" target="_blank" rel="noopener noreferrer">Open Genesys Login</a>
-  </p>
+  <p><button id="loginBtn">Login with Genesys (PKCE)</button></p>
 
   <pre id="debug" style="white-space:pre-wrap;background:#111;color:#0f0;padding:10px;border-radius:6px;"></pre>
 
@@ -22,17 +16,80 @@
     const redirectUri = "https://proud-pebble-04fa37b03.2.azurestaticapps.net";
     const region = "mypurecloud.de";
 
-    document.getElementById("buildBtn").addEventListener("click", () => {
+    const debugEl = document.getElementById("debug");
+
+    // --- helpers ---
+    function base64UrlEncode(bytes) {
+      const bin = String.fromCharCode(...bytes);
+      return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+    }
+
+    function randomBytes(len) {
+      const arr = new Uint8Array(len);
+      crypto.getRandomValues(arr);
+      return arr;
+    }
+
+    async function sha256(bytes) {
+      const hash = await crypto.subtle.digest("SHA-256", bytes);
+      return new Uint8Array(hash);
+    }
+
+    async function buildPkce() {
+      // Verifier: high entropy, URL-safe
+      const verifierBytes = randomBytes(32);
+      const verifier = base64UrlEncode(verifierBytes); // ~43 chars, URL-safe
+
+      // Challenge: BASE64URL(SHA256(verifier))
+      const verifierUtf8 = new TextEncoder().encode(verifier);
+      const challengeBytes = await sha256(verifierUtf8);
+      const challenge = base64UrlEncode(challengeBytes);
+
+      return { verifier, challenge };
+    }
+
+    function getQueryParams() {
+      return new URLSearchParams(window.location.search);
+    }
+
+    // Show result after redirect (success/error)
+    (function showReturnValues() {
+      const qp = getQueryParams();
+      if (qp.has("error")) {
+        debugEl.textContent =
+          `Returned error:\n` +
+          `error=${qp.get("error")}\n` +
+          `error_description=${qp.get("error_description") || ""}\n`;
+      } else if (qp.has("code")) {
+        debugEl.textContent =
+          `Returned SUCCESS:\n` +
+          `code=${qp.get("code")}\n` +
+          `state=${qp.get("state") || ""}\n\n` +
+          `Next step (later): exchange code for token at /oauth/token using the stored code_verifier.`;
+      } else {
+        debugEl.textContent = "Click the button to start PKCE login.";
+      }
+    })();
+
+    document.getElementById("loginBtn").addEventListener("click", async () => {
+      const { verifier, challenge } = await buildPkce();
+      const state = base64UrlEncode(randomBytes(16));
+
+      // Store for the next step (token exchange) + CSRF protection
+      sessionStorage.setItem("pkce_verifier", verifier);
+      sessionStorage.setItem("oauth_state", state);
+
       const authUrl =
         `https://login.${region}/oauth/authorize` +
         `?response_type=code` +
-        `&client_id=${clientId}` +
+        `&client_id=${encodeURIComponent(clientId)}` +
         `&redirect_uri=${encodeURIComponent(redirectUri)}` +
         `&code_challenge_method=S256` +
-        `&code_challenge=dummy`;
+        `&code_challenge=${encodeURIComponent(challenge)}` +
+        `&state=${encodeURIComponent(state)}`;
 
-      document.getElementById("loginLink").href = authUrl;
-      document.getElementById("debug").textContent = "Auth URL:\n" + authUrl;
+      // Use a real navigation. If iframe blocks it, swap to window.open(authUrl, "_blank")
+      window.open(authUrl, "_blank");
     });
   </script>
 </body>
