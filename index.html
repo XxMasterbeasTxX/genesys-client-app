@@ -89,7 +89,7 @@
         `&state=${encodeURIComponent(state)}`;
 
       // Use a real navigation. If iframe blocks it, swap to window.open(authUrl, "_blank")
-      window.open(authUrl, "_blank");
+      window.location.href = authUrl;
     });
   </script>
 </body>
