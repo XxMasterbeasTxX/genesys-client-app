@@ -12,85 +12,86 @@
   <pre id="debug" style="white-space:pre-wrap;background:#111;color:#0f0;padding:10px;border-radius:6px;"></pre>
 
   <script>
-    const clientId = "3b89b95c-d658-463e-9280-30a5bd7f4c2c";
-    const redirectUri = "https://proud-pebble-04fa37b03.2.azurestaticapps.net";
-    const region = "mypurecloud.de";
+  const clientId = "3b89b95c-d658-463e-9280-30a5bd7f4c2c";
+  const redirectUri = "https://proud-pebble-04fa37b03.2.azurestaticapps.net";
+  const region = "mypurecloud.de";
 
-    const debugEl = document.getElementById("debug");
+  const tokenUrl = `https://login.${region}/oauth/token`;
+  const apiBase = `https://api.${region}`;
+  const debugEl = document.getElementById("debug");
 
-    // --- helpers ---
-    function base64UrlEncode(bytes) {
-      const bin = String.fromCharCode(...bytes);
-      return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-    }
+  function qp() { return new URLSearchParams(window.location.search); }
+  function clearQuery() {
+    history.replaceState({}, document.title, location.origin + location.pathname);
+  }
 
-    function randomBytes(len) {
-      const arr = new Uint8Array(len);
-      crypto.getRandomValues(arr);
-      return arr;
-    }
+  async function exchange(code) {
+    const verifier = sessionStorage.getItem("pkce_verifier");
+    if (!verifier) throw new Error("Missing pkce_verifier (start login again).");
 
-    async function sha256(bytes) {
-      const hash = await crypto.subtle.digest("SHA-256", bytes);
-      return new Uint8Array(hash);
-    }
-
-    async function buildPkce() {
-      // Verifier: high entropy, URL-safe
-      const verifierBytes = randomBytes(32);
-      const verifier = base64UrlEncode(verifierBytes); // ~43 chars, URL-safe
-
-      // Challenge: BASE64URL(SHA256(verifier))
-      const verifierUtf8 = new TextEncoder().encode(verifier);
-      const challengeBytes = await sha256(verifierUtf8);
-      const challenge = base64UrlEncode(challengeBytes);
-
-      return { verifier, challenge };
-    }
-
-    function getQueryParams() {
-      return new URLSearchParams(window.location.search);
-    }
-
-    // Show result after redirect (success/error)
-    (function showReturnValues() {
-      const qp = getQueryParams();
-      if (qp.has("error")) {
-        debugEl.textContent =
-          `Returned error:\n` +
-          `error=${qp.get("error")}\n` +
-          `error_description=${qp.get("error_description") || ""}\n`;
-      } else if (qp.has("code")) {
-        debugEl.textContent =
-          `Returned SUCCESS:\n` +
-          `code=${qp.get("code")}\n` +
-          `state=${qp.get("state") || ""}\n\n` +
-          `Next step (later): exchange code for token at /oauth/token using the stored code_verifier.`;
-      } else {
-        debugEl.textContent = "Click the button to start PKCE login.";
-      }
-    })();
-
-    document.getElementById("loginBtn").addEventListener("click", async () => {
-      const { verifier, challenge } = await buildPkce();
-      const state = base64UrlEncode(randomBytes(16));
-
-      // Store for the next step (token exchange) + CSRF protection
-      sessionStorage.setItem("pkce_verifier", verifier);
-      sessionStorage.setItem("oauth_state", state);
-
-      const authUrl =
-        `https://login.${region}/oauth/authorize` +
-        `?response_type=code` +
-        `&client_id=${encodeURIComponent(clientId)}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&code_challenge_method=S256` +
-        `&code_challenge=${encodeURIComponent(challenge)}` +
-        `&state=${encodeURIComponent(state)}`;
-
-      // Use a real navigation. If iframe blocks it, swap to window.open(authUrl, "_blank")
-      window.location.href = authUrl;
+    const body = new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: clientId,
+      code,
+      redirect_uri: redirectUri,
+      code_verifier: verifier
     });
+
+    const r = await fetch(tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body
+    });
+
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(`Token exchange failed (${r.status}): ${JSON.stringify(j)}`);
+    return j;
+  }
+
+  async function usersMe(accessToken) {
+    const r = await fetch(`${apiBase}/api/v2/users/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(`/users/me failed (${r.status}): ${JSON.stringify(j)}`);
+    return j;
+  }
+
+  (async () => {
+    const p = qp();
+
+    if (!p.has("code")) {
+      debugEl.textContent = "No code in URL. Click your Login button first.";
+      return;
+    }
+
+    const code = p.get("code");
+    const returnedState = p.get("state") || "";
+    const expectedState = sessionStorage.getItem("oauth_state") || "";
+
+    if (!expectedState || returnedState !== expectedState) {
+      debugEl.textContent = `State check failed.\nexpected=${expectedState}\nreturned=${returnedState}`;
+      return;
+    }
+
+    debugEl.textContent = "Exchanging code for token...\n";
+    const token = await exchange(code);
+
+    // prevent re-exchanging if you refresh
+    clearQuery();
+
+    debugEl.textContent =
+      "✅ Token OK\n" +
+      `expires_in: ${token.expires_in}\n` +
+      `access_token: ${String(token.access_token).slice(0, 30)}...\n\n` +
+      "Calling /api/v2/users/me...\n";
+
+    const me = await usersMe(token.access_token);
+
+    debugEl.textContent +=
+      "✅ /users/me OK\n\n" +
+      JSON.stringify({ id: me.id, name: me.name, email: me.email }, null, 2);
+  })();
   </script>
 </body>
 </html>
