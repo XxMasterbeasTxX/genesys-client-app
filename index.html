@@ -2,34 +2,34 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Genesys OAuth PKCE</title>
+  <title>Genesys Auto Login PKCE</title>
 </head>
 <body>
-  <h1>Genesys OAuth PKCE</h1>
-
-  <button id="loginBtn">Login</button>
-  <button id="logoutBtn">Logout</button>
+  <h1>Genesys Auto Login PKCE</h1>
 
   <pre id="debug" style="white-space:pre-wrap;background:#111;color:#0f0;padding:10px;border-radius:6px;"></pre>
 
   <script>
+    // --- CONFIG ---
     const clientId = "3b89b95c-d658-463e-9280-30a5bd7f4c2c";
     const redirectUri = "https://proud-pebble-04fa37b03.2.azurestaticapps.net";
     const region = "mypurecloud.de";
 
     const tokenUrl = `https://login.${region}/oauth/token`;
     const apiBase  = `https://api.${region}`;
-    const debugEl  = document.getElementById("debug");
 
-    // Storage keys
-    const K_ACCESS_TOKEN = "gc_access_token";
-    const K_EXPIRES_AT   = "gc_expires_at";   // epoch ms
+    // --- STORAGE KEYS ---
+    const K_ACCESS_TOKEN  = "gc_access_token";
+    const K_EXPIRES_AT    = "gc_expires_at";     // epoch ms
     const K_PKCE_VERIFIER = "pkce_verifier";
     const K_OAUTH_STATE   = "oauth_state";
 
-    // Safety skew so we don't use a token that's about to expire
+    // Use a small skew to avoid using a token that's about to expire mid-request
     const EXPIRY_SKEW_MS = 60 * 1000;
 
+    const debugEl = document.getElementById("debug");
+
+    // --- UTILS ---
     function qp() { return new URLSearchParams(window.location.search); }
     function clearQuery() {
       history.replaceState({}, document.title, location.origin + location.pathname);
@@ -44,15 +44,12 @@
     function getValidAccessToken() {
       const accessToken = sessionStorage.getItem(K_ACCESS_TOKEN);
       const expiresAtStr = sessionStorage.getItem(K_EXPIRES_AT);
-
       if (!accessToken || !expiresAtStr) return null;
 
       const expiresAt = Number(expiresAtStr);
       if (!Number.isFinite(expiresAt)) return null;
 
-      // token must be valid for at least the skew window
       if (Date.now() >= (expiresAt - EXPIRY_SKEW_MS)) return null;
-
       return accessToken;
     }
 
@@ -63,29 +60,57 @@
       sessionStorage.removeItem(K_OAUTH_STATE);
     }
 
-    // --- PKCE helpers ---
+    // --- PKCE HELPERS ---
     function base64UrlEncode(bytes) {
       const bin = String.fromCharCode(...bytes);
       return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
     }
+
     function randomBytes(len) {
       const arr = new Uint8Array(len);
       crypto.getRandomValues(arr);
       return arr;
     }
+
     async function sha256(bytes) {
       const hash = await crypto.subtle.digest("SHA-256", bytes);
       return new Uint8Array(hash);
     }
+
     async function buildPkce() {
-      const verifier = base64UrlEncode(randomBytes(32)); // URL-safe
+      // Verifier must be high-entropy and URL-safe
+      const verifier = base64UrlEncode(randomBytes(32));
+      // Challenge is BASE64URL(SHA256(verifier))
       const challenge = base64UrlEncode(await sha256(new TextEncoder().encode(verifier)));
       return { verifier, challenge };
     }
 
+    // --- OAUTH + API ---
+    async function startLoginRedirect() {
+      debugEl.textContent = "Starting OAuth (PKCE) login...\n";
+
+      const { verifier, challenge } = await buildPkce();
+      const state = base64UrlEncode(randomBytes(16));
+
+      sessionStorage.setItem(K_PKCE_VERIFIER, verifier);
+      sessionStorage.setItem(K_OAUTH_STATE, state);
+
+      const authUrl =
+        `https://login.${region}/oauth/authorize` +
+        `?response_type=code` +
+        `&client_id=${encodeURIComponent(clientId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&code_challenge_method=S256` +
+        `&code_challenge=${encodeURIComponent(challenge)}` +
+        `&state=${encodeURIComponent(state)}`;
+
+      // Auto-login stays within the app
+      window.location.href = authUrl;
+    }
+
     async function exchangeCodeForToken(code) {
       const verifier = sessionStorage.getItem(K_PKCE_VERIFIER);
-      if (!verifier) throw new Error("Missing pkce_verifier (click Login again).");
+      if (!verifier) throw new Error("Missing pkce_verifier (session lost).");
 
       const body = new URLSearchParams({
         grant_type: "authorization_code",
@@ -103,7 +128,7 @@
 
       const json = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(`Token exchange failed (${resp.status}): ${JSON.stringify(json)}`);
-      return json; // {access_token, expires_in, token_type, ...}
+      return json;
     }
 
     async function usersMe(accessToken) {
@@ -115,7 +140,7 @@
       return json;
     }
 
-    async function showMe(accessToken, note) {
+    async function runUserMe(accessToken, note) {
       debugEl.textContent = (note ? note + "\n\n" : "") + "Calling /api/v2/users/me...\n";
       const me = await usersMe(accessToken);
       debugEl.textContent +=
@@ -123,53 +148,11 @@
         JSON.stringify({ id: me.id, name: me.name, email: me.email }, null, 2);
     }
 
-    // --- Button wiring ---
-    document.getElementById("loginBtn").addEventListener("click", async () => {
-      debugEl.textContent = "Starting login...\n";
-
-      const { verifier, challenge } = await buildPkce();
-      const state = base64UrlEncode(randomBytes(16));
-
-      sessionStorage.setItem(K_PKCE_VERIFIER, verifier);
-      sessionStorage.setItem(K_OAUTH_STATE, state);
-
-      const authUrl =
-        `https://login.${region}/oauth/authorize` +
-        `?response_type=code` +
-        `&client_id=${encodeURIComponent(clientId)}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-        `&code_challenge_method=S256` +
-        `&code_challenge=${encodeURIComponent(challenge)}` +
-        `&state=${encodeURIComponent(state)}`;
-
-      // Stay inside the app
-      window.location.href = authUrl;
-    });
-
-    document.getElementById("logoutBtn").addEventListener("click", async () => {
-      clearAuthSession();
-      clearQuery();
-      debugEl.textContent = "Logged out (local session cleared). Click Login.\n";
-    });
-
-    // --- Startup logic ---
+    // --- MAIN FLOW (AUTO) ---
     (async () => {
-      // 1) If we already have a valid token, just use it (no re-auth on refresh)
-      const existing = getValidAccessToken();
-      if (existing) {
-        try {
-          await showMe(existing, "✅ Reusing existing access token (no login needed).");
-          return;
-        } catch (e) {
-          // Token might be revoked/invalid; clear and fall back to login
-          clearAuthSession();
-          debugEl.textContent = "Existing token failed; please login again.\n\n❌ " + e.message;
-          return;
-        }
-      }
-
-      // 2) If we returned from authorize with code/state, exchange it once
       const p = qp();
+
+      // A) If we returned with a code, exchange it, store token, call /users/me.
       if (p.has("code")) {
         const code = p.get("code");
         const returnedState = p.get("state") || "";
@@ -177,29 +160,44 @@
 
         if (!expectedState || returnedState !== expectedState) {
           debugEl.textContent =
-            `State check failed.\nexpected=${expectedState}\nreturned=${returnedState}\n`;
+            `State check failed.\nexpected=${expectedState}\nreturned=${returnedState}\n\n` +
+            "Restarting login...";
+          clearAuthSession();
+          await startLoginRedirect();
           return;
         }
 
         debugEl.textContent = "Exchanging code for token...\n";
         try {
           const token = await exchangeCodeForToken(code);
-
-          // Persist token so refresh doesn't require login
           setToken(token);
-
-          // prevent re-exchanging if you refresh
-          clearQuery();
-
-          await showMe(token.access_token, "✅ Token OK (saved in sessionStorage).");
+          clearQuery(); // avoid re-exchange on refresh
+          await runUserMe(token.access_token, "✅ Token OK (saved in sessionStorage).");
         } catch (e) {
-          debugEl.textContent = "❌ " + e.message;
+          debugEl.textContent = "❌ " + e.message + "\n\nRestarting login...";
+          clearAuthSession();
+          await startLoginRedirect();
         }
         return;
       }
 
-      // 3) Otherwise, show login prompt
-      debugEl.textContent = "Ready. Click Login.\n";
+      // B) If we already have a valid token, call /users/me immediately.
+      const existing = getValidAccessToken();
+      if (existing) {
+        try {
+          await runUserMe(existing, "✅ Reusing existing access token (no login needed).");
+          return;
+        } catch (e) {
+          // Token revoked/invalid/expired unexpectedly — restart login
+          debugEl.textContent = "Token failed. Restarting login...\n\n❌ " + e.message;
+          clearAuthSession();
+          await startLoginRedirect();
+          return;
+        }
+      }
+
+      // C) No token and no code: auto-login
+      await startLoginRedirect();
     })();
   </script>
 </body>
