@@ -1,20 +1,31 @@
-<h1>Genesys OAuth Test</h1>
-<button onclick="login()">Login with Genesys</button>
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Genesys OAuth Test</title>
+</head>
+<body>
+  <h1>Genesys OAuth Test</h1>
+  <button id="loginBtn">Login with Genesys</button>
 
-<script>
-  const clientId = "3b89b95c-d658-463e-9280-30a5bd7f4c2c";
-  const redirectUri = "https://proud-pebble-04fa37b03.2.azurestaticapps.net";
-  const region = "mypurecloud.de";
+  <script>
+    const clientId = "3b89b95c-d658-463e-9280-30a5bd7f4c2c";
+    const redirectUri = "https://proud-pebble-04fa37b03.2.azurestaticapps.net";
+    const region = "mypurecloud.de";
 
-  function login() {
-    const authUrl =
-      `https://login.${region}/oauth/authorize` +
-      `?response_type=code` +
-      `&client_id=${clientId}` +
-      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-      `&code_challenge_method=S256` +
-      `&code_challenge=dummy`;
+    document.getElementById("loginBtn").addEventListener("click", function () {
+      alert("Button clicked"); // TEMP TEST
 
-    window.location.href = authUrl;
-  }
-</script>
+      const authUrl =
+        `https://login.${region}/oauth/authorize` +
+        `?response_type=code` +
+        `&client_id=${clientId}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&code_challenge_method=S256` +
+        `&code_challenge=dummy`;
+
+      window.location.href = authUrl;
+    });
+  </script>
+</body>
+</html>
