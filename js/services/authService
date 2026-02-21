@@ -1,0 +1,185 @@
+import { CONFIG } from "../config.js";
+
+/**
+ * Browser PKCE Auth (Authorization Code + PKCE)
+ * - sessionStorage token storage
+ * - PKCE S256
+ * - state validation
+ * - clears ?code&state from URL (preserving hash routing)
+ */
+
+const STORAGE_KEYS = {
+  accessToken: "gc_access_token",
+  expiresAt: "gc_expires_at", // epoch ms
+  tokenType: "gc_token_type",
+  scope: "gc_scope",
+  pkceVerifier: "gc_pkce_verifier",
+  oauthState: "gc_oauth_state",
+};
+
+const SAFETY_SKEW_MS = 60_000;
+
+function nowMs() { return Date.now(); }
+
+function base64UrlEncode(bytes) {
+  const bin = String.fromCharCode(...bytes);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function randomStringBytes(len) {
+  const bytes = new Uint8Array(len);
+  crypto.getRandomValues(bytes);
+  return bytes;
+}
+
+function randomString(lenBytes = 32) {
+  return base64UrlEncode(randomStringBytes(lenBytes));
+}
+
+async function sha256Base64Url(str) {
+  const data = new TextEncoder().encode(str);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return base64UrlEncode(new Uint8Array(hash));
+}
+
+function tokenIsValid() {
+  const token = sessionStorage.getItem(STORAGE_KEYS.accessToken);
+  const expiresAt = Number(sessionStorage.getItem(STORAGE_KEYS.expiresAt) || "0");
+  return !!token && Number.isFinite(expiresAt) && (expiresAt - SAFETY_SKEW_MS > nowMs());
+}
+
+function getAccessToken() {
+  if (!tokenIsValid()) return null;
+  return sessionStorage.getItem(STORAGE_KEYS.accessToken);
+}
+
+function setToken({ access_token, token_type, expires_in, scope }) {
+  const expiresAt = nowMs() + Number(expires_in) * 1000;
+  sessionStorage.setItem(STORAGE_KEYS.accessToken, access_token);
+  sessionStorage.setItem(STORAGE_KEYS.tokenType, token_type || "Bearer");
+  sessionStorage.setItem(STORAGE_KEYS.scope, scope || "");
+  sessionStorage.setItem(STORAGE_KEYS.expiresAt, String(expiresAt));
+}
+
+function clearAuthArtifacts() {
+  sessionStorage.removeItem(STORAGE_KEYS.pkceVerifier);
+  sessionStorage.removeItem(STORAGE_KEYS.oauthState);
+}
+
+function clearAllAuthSession() {
+  sessionStorage.removeItem(STORAGE_KEYS.accessToken);
+  sessionStorage.removeItem(STORAGE_KEYS.expiresAt);
+  sessionStorage.removeItem(STORAGE_KEYS.tokenType);
+  sessionStorage.removeItem(STORAGE_KEYS.scope);
+  clearAuthArtifacts();
+}
+
+function clearAuthParamsFromUrlPreserveHash() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("code");
+  url.searchParams.delete("state");
+  url.searchParams.delete("error");
+  url.searchParams.delete("error_description");
+  // Preserve hash route
+  window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+}
+
+async function buildAuthorizeUrl({ clientId, redirectUri, scopes }) {
+  const state = randomString(16);
+  const verifier = randomString(32);
+  const challenge = await sha256Base64Url(verifier);
+
+  sessionStorage.setItem(STORAGE_KEYS.oauthState, state);
+  sessionStorage.setItem(STORAGE_KEYS.pkceVerifier, verifier);
+
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    scope: scopes.join(" "),
+    state,
+    code_challenge_method: "S256",
+    code_challenge: challenge,
+  });
+
+  return `https://${CONFIG.authHost}/oauth/authorize?${params.toString()}`;
+}
+
+async function exchangeCodeForToken({ clientId, redirectUri, code }) {
+  const verifier = sessionStorage.getItem(STORAGE_KEYS.pkceVerifier);
+  if (!verifier) throw new Error("Missing PKCE verifier in sessionStorage");
+
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    code,
+    code_verifier: verifier,
+  });
+
+  const res = await fetch(`https://${CONFIG.authHost}/oauth/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`Token exchange failed (${res.status}): ${JSON.stringify(json)}`);
+
+  setToken(json);
+  clearAuthArtifacts();
+  return json;
+}
+
+export function createAuthService() {
+  const clientId = CONFIG.oauthClientId;
+  const redirectUri = CONFIG.oauthRedirectUri;
+  const scopes = CONFIG.oauthScopes;
+
+  if (!clientId || clientId.includes("PUT_YOUR_CLIENT_ID_HERE")) {
+    // Fail fast rather than redirect-looping
+    throw new Error("CONFIG.oauthClientId is not set.");
+  }
+
+  async function ensureAuthenticated() {
+    // A) Valid token already present
+    if (tokenIsValid()) return { status: "ok", from: "cache" };
+
+    // B) Returned from OAuth with an error
+    const params = new URLSearchParams(window.location.search);
+    const error = params.get("error");
+    if (error) {
+      const desc = params.get("error_description") || "";
+      clearAuthParamsFromUrlPreserveHash();
+      throw new Error(`OAuth error: ${error} ${desc}`);
+    }
+
+    // C) Returned with code -> exchange
+    const code = params.get("code");
+    if (code) {
+      const returnedState = params.get("state") || "";
+      const expectedState = sessionStorage.getItem(STORAGE_KEYS.oauthState) || "";
+      if (!expectedState || returnedState !== expectedState) {
+        clearAuthParamsFromUrlPreserveHash();
+        clearAllAuthSession();
+        throw new Error("OAuth state validation failed");
+      }
+
+      await exchangeCodeForToken({ clientId, redirectUri, code });
+      clearAuthParamsFromUrlPreserveHash();
+      return { status: "ok", from: "exchange" };
+    }
+
+    // D) Need to login
+    const authorizeUrl = await buildAuthorizeUrl({ clientId, redirectUri, scopes });
+    window.location.assign(authorizeUrl);
+    return { status: "redirecting" };
+  }
+
+  return {
+    ensureAuthenticated,
+    getAccessToken,
+    tokenIsValid,
+    clearAllAuthSession,
+  };
+}

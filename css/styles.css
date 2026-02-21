@@ -1,0 +1,113 @@
+:root {
+  --bg: #0b0f14;
+  --panel: #111824;
+  --panel-2: #0f1621;
+  --text: #e7eef7;
+  --muted: #93a4b8;
+  --border: rgba(255,255,255,0.08);
+  --shadow: 0 10px 30px rgba(0,0,0,0.35);
+  --radius: 14px;
+  --pad: 14px;
+  --nav-w: 240px;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255,255,255,0.03), transparent);
+}
+
+.brand { display: flex; gap: 10px; align-items: center; }
+.brand-mark {
+  width: 36px; height: 36px; border-radius: 10px;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+}
+.brand-title { font-weight: 650; }
+.brand-subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+.pill {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+  color: var(--muted);
+}
+
+.app-body {
+  display: grid;
+  grid-template-columns: var(--nav-w) 1fr;
+  min-height: 0;
+}
+
+.app-nav {
+  padding: 12px;
+  border-right: 1px solid var(--border);
+  background: var(--panel-2);
+  overflow: auto;
+}
+
+.nav-item {
+  display: block;
+  padding: 10px 10px;
+  border-radius: 12px;
+  color: var(--text);
+  text-decoration: none;
+  border: 1px solid transparent;
+}
+.nav-item:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: var(--border);
+}
+.nav-item.active {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.14);
+}
+
+.app-main {
+  padding: 16px;
+  overflow: auto;
+  min-height: 0;
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--pad);
+}
+
+.h1 { font-size: 20px; margin: 0 0 8px; }
+.p  { color: var(--muted); margin: 0; line-height: 1.45; }
+.hr { height: 1px; background: var(--border); margin: 14px 0; border: 0; }
+
+.kv {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 8px 12px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.kv .k { color: var(--muted); }
+.kv .v { color: var(--text); word-break: break-word; }
