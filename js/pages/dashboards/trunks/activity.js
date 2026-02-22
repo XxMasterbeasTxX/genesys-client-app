@@ -176,7 +176,6 @@ export async function render({ route, me, api }) {
     fullscreenBtn.textContent = isMaximized ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
   });
 
-  // Allow Escape key to exit maximized mode
   function onEscKey(e) {
     if (e.key === "Escape" && isMaximized) {
       isMaximized = false;
@@ -186,7 +185,15 @@ export async function render({ route, me, api }) {
   }
   document.addEventListener("keydown", onEscKey);
 
-  header.append(fullscreenBtn);
+  // Open in new tab button (true fullscreen possible outside iframe)
+  const popoutBtn = document.createElement("button");
+  popoutBtn.className = "btn btn-sm trunk-popout-toggle";
+  popoutBtn.textContent = "↗ Open in new tab";
+  popoutBtn.addEventListener("click", () => {
+    window.open(window.location.href, "_blank");
+  });
+
+  header.append(fullscreenBtn, popoutBtn);
 
   root.append(header, warningBanner, filterSection, graphSection, tableSection);
 
