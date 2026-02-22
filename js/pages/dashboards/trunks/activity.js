@@ -223,9 +223,13 @@ export async function render({ route, me, api }) {
   popoutBtn.textContent = "↗ Open in new tab";
   popoutBtn.addEventListener("click", () => {
     saveTabHandoff();
+    // Save fullscreen preference in localStorage (survives OAuth redirect)
+    localStorage.setItem("gc_popout_fs", JSON.stringify({
+      route: "dashboards/trunks/activity",
+      ts: Date.now(),
+    }));
     const url = new URL(window.location.href);
-    url.search = ""; // clear any existing query params
-    url.searchParams.set("fs", "1");
+    url.search = "";
     url.hash = "#dashboards/trunks/activity";
     window.open(url.toString(), "_blank");
   });
@@ -686,15 +690,30 @@ export async function render({ route, me, api }) {
     statusBadge.textContent = "Live";
     statusBadge.className = "pill trunk-status-badge trunk-status--connected";
 
-    // Auto-fullscreen when opened via popout button (?fs=1)
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("fs") === "1") {
-      root.requestFullscreen().catch(() => {
-        // Fallback to CSS maximized if native fails
-        isMaximized = true;
-        root.classList.add("trunk-activity--fullscreen");
-        syncFullscreenLabel(true);
-      });
+    // Auto-fullscreen when opened via popout button
+    const popoutFs = localStorage.getItem("gc_popout_fs");
+    if (popoutFs) {
+      try {
+        const { ts } = JSON.parse(popoutFs);
+        // Only honour if less than 60 seconds old
+        if (Date.now() - ts < 60_000) {
+          localStorage.removeItem("gc_popout_fs");
+          // CSS maximized immediately (works without user gesture)
+          isMaximized = true;
+          root.classList.add("trunk-activity--fullscreen");
+          syncFullscreenLabel(true);
+          // Try native fullscreen on first click anywhere in the page
+          const goNative = () => {
+            root.requestFullscreen().catch(() => {});
+            document.removeEventListener("click", goNative);
+          };
+          document.addEventListener("click", goNative, { once: true });
+        } else {
+          localStorage.removeItem("gc_popout_fs");
+        }
+      } catch (_) {
+        localStorage.removeItem("gc_popout_fs");
+      }
     }
   } catch (e) {
     statusBadge.textContent = "Error";
