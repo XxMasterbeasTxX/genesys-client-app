@@ -287,4 +287,3 @@ export async function render({ route, me, api }) {
 
   return root;
 }
-}
