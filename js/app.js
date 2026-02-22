@@ -1,9 +1,10 @@
 import { CONFIG } from "./config.js";
-import { NAV_TREE, getDefaultRoute, getFirstLeafUnder } from "./navConfig.js";
+import { NAV_TREE, getFirstLeafUnder } from "./navConfig.js";
 import { createNav } from "./nav.js";
 import { Router } from "./router.js";
 import { getPageLoader } from "./pageRegistry.js";
 import { renderNotFoundPage } from "./pages/notfound.js";
+import { renderWelcomePage } from "./pages/welcome.js";
 import { escapeHtml } from "./utils.js";
 import {
   ensureAuthenticatedWithMe,
@@ -18,12 +19,6 @@ function setHeader({ authText }) {
   document.getElementById("authPill").textContent = authText;
 }
 
-function ensureDefaultRoute() {
-  if (!window.location.hash || window.location.hash === "#") {
-    window.location.hash = `#${getDefaultRoute()}`;
-  }
-}
-
 function renderFatalError(message) {
   const outletEl = document.getElementById("appMain");
   outletEl.innerHTML = `
@@ -35,7 +30,6 @@ function renderFatalError(message) {
 }
 
 (async function main() {
-  ensureDefaultRoute();
   setHeader({ authText: "Auth: starting…" });
 
   // --- Authenticate ---
@@ -74,6 +68,9 @@ function renderFatalError(message) {
   const router = new Router({
     outletEl,
     resolve: async (route) => {
+      // Root route — show welcome page with no preselection
+      if (route === "/") return renderWelcomePage();
+
       const loader = getPageLoader(route);
       if (loader) return loader({ route, me: res.me, api });
 

@@ -7,25 +7,13 @@
 import { NotificationService } from "../../../services/notificationService.js";
 import { escapeHtml } from "../../../utils.js";
 import { saveTabHandoff } from "../../../services/authService.js";
-
-// How many trunk IDs to batch per metrics REST call
-const METRICS_BATCH_SIZE = 100;
-
-// Polling interval for periodic metric refresh (ms)
-const POLL_INTERVAL_MS = 15_000;
-
-// How many data-points to keep in the rolling chart history
-const CHART_HISTORY_MAX = 120;
-
-// Palette for per-trunk chart lines
-const CHART_COLOURS = [
-  "#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7",
-  "#06b6d4", "#ec4899", "#14b8a6", "#f97316", "#6366f1",
-];
-
-// ── Threshold: warn when total concurrent calls reaches this number ───
-// Set to 1 for testing (any active call triggers). Change per customer before deploying.
-const CALL_THRESHOLD = 1;
+import {
+  CALL_THRESHOLD,
+  POLL_INTERVAL_MS,
+  METRICS_BATCH_SIZE,
+  CHART_HISTORY_MAX,
+  CHART_COLOURS,
+} from "./trunkConfig.js";
 
 /**
  * Strip trailing UUID / ID suffix from trunk names returned by the API.
