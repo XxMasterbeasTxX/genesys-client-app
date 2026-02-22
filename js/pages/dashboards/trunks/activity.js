@@ -165,22 +165,53 @@ export async function render({ route, me, api }) {
   });
   header.append(graphToggleBtn);
 
-  // Fullscreen (maximized) toggle button (in header)
+  // Fullscreen toggle — native API when available, CSS maximized as fallback
   let isMaximized = false;
+  const canFullscreen = typeof root.requestFullscreen === "function";
+
   const fullscreenBtn = document.createElement("button");
   fullscreenBtn.className = "btn btn-sm trunk-fullscreen-toggle";
   fullscreenBtn.textContent = "⛶ Fullscreen";
-  fullscreenBtn.addEventListener("click", () => {
+
+  function syncFullscreenLabel(active) {
+    fullscreenBtn.textContent = active ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
+  }
+
+  fullscreenBtn.addEventListener("click", async () => {
+    // Try native fullscreen first
+    if (canFullscreen) {
+      try {
+        if (document.fullscreenElement === root) {
+          await document.exitFullscreen();
+        } else {
+          await root.requestFullscreen();
+        }
+        return; // onFullscreenChange handles the rest
+      } catch (_) {
+        // Blocked (iframe sandbox) — fall through to CSS mode
+      }
+    }
+    // CSS maximized fallback
     isMaximized = !isMaximized;
     root.classList.toggle("trunk-activity--fullscreen", isMaximized);
-    fullscreenBtn.textContent = isMaximized ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
+    syncFullscreenLabel(isMaximized);
   });
 
+  // Native fullscreen events
+  function onFullscreenChange() {
+    const isFs = document.fullscreenElement === root;
+    root.classList.toggle("trunk-activity--fullscreen", isFs);
+    syncFullscreenLabel(isFs);
+    isMaximized = isFs;
+  }
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+
+  // Esc key for CSS maximized fallback (native fullscreen handles Esc itself)
   function onEscKey(e) {
-    if (e.key === "Escape" && isMaximized) {
+    if (e.key === "Escape" && isMaximized && !document.fullscreenElement) {
       isMaximized = false;
       root.classList.remove("trunk-activity--fullscreen");
-      fullscreenBtn.textContent = "⛶ Fullscreen";
+      syncFullscreenLabel(false);
     }
   }
   document.addEventListener("keydown", onEscKey);
@@ -661,6 +692,7 @@ export async function render({ route, me, api }) {
       stopTabFlash();
       if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
       document.removeEventListener("keydown", onEscKey);
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
       notifService?.destroy();
       observer.disconnect();
     }
