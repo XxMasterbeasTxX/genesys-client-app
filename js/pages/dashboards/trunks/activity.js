@@ -10,15 +10,29 @@ import { escapeHtml } from "../../../utils.js";
 // How many trunk IDs to batch per metrics REST call
 const METRICS_BATCH_SIZE = 100;
 
+// Polling interval for periodic metric refresh (ms)
+const POLL_INTERVAL_MS = 15_000;
+
+/**
+ * Strip trailing UUID / ID suffix from trunk names returned by the API.
+ * E.g. "MyTrunk_abc12345-def6-7890-abcd-ef1234567890" → "MyTrunk"
+ */
+function cleanTrunkName(raw) {
+  return raw
+    .replace(/[_\s-]+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i, "")
+    .trim();
+}
+
 /**
  * Main render entry point — called by the page registry.
  */
 export async function render({ route, me, api }) {
   // ── State ───────────────────────────────────────────────
-  let allTrunks = [];            // full list from API
+  let allTrunks = [];            // full list from API (deduplicated)
   let selectedIds = new Set();   // trunk IDs the user wants to see
   let metricsMap = new Map();    // trunkId → latest metrics object
   let notifService = null;
+  let pollTimer = null;          // periodic REST poll handle
 
   // ── DOM skeleton ────────────────────────────────────────
   const root = document.createElement("div");
@@ -86,7 +100,6 @@ export async function render({ route, me, api }) {
         <th>Inbound</th>
         <th>Outbound</th>
         <th>Total Calls</th>
-        <th>Edge</th>
         <th>Updated</th>
       </tr>
     </thead>
@@ -100,7 +113,7 @@ export async function render({ route, me, api }) {
   function renderFilterList() {
     const q = filterSearch.value.toLowerCase();
     const filtered = allTrunks.filter((t) =>
-      t.name.toLowerCase().includes(q),
+      t._cleanName.toLowerCase().includes(q),
     );
 
     filterList.innerHTML = "";
@@ -118,7 +131,7 @@ export async function render({ route, me, api }) {
       });
 
       const span = document.createElement("span");
-      span.textContent = trunk.name;
+      span.textContent = trunk._cleanName;
 
       label.append(cb, span);
       filterList.append(label);
@@ -144,10 +157,10 @@ export async function render({ route, me, api }) {
         return { trunk, m };
       })
       .filter((r) => r.trunk)
-      .sort((a, b) => a.trunk.name.localeCompare(b.trunk.name));
+      .sort((a, b) => a.trunk._cleanName.localeCompare(b.trunk._cleanName));
 
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="7" class="trunk-empty">Select one or more trunks above</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="trunk-empty">Select one or more trunks above</td></tr>`;
       return;
     }
 
@@ -159,18 +172,16 @@ export async function render({ route, me, api }) {
         const total = (typeof inbound === "number" && typeof outbound === "number")
           ? inbound + outbound
           : "—";
-        const edge = trunk.edge?.name || trunk.edgeGroup?.name || "—";
         const updated = m
           ? new Date(m.eventTime || Date.now()).toLocaleTimeString()
           : "—";
 
         return `<tr>
-          <td>${escapeHtml(trunk.name)}</td>
+          <td>${escapeHtml(trunk._cleanName)}</td>
           <td><span class="trunk-dot trunk-dot--${status.color}"></span> ${escapeHtml(status.label)}</td>
           <td>${escapeHtml(String(inbound))}</td>
           <td>${escapeHtml(String(outbound))}</td>
           <td>${escapeHtml(String(total))}</td>
-          <td>${escapeHtml(edge)}</td>
           <td>${escapeHtml(updated)}</td>
         </tr>`;
       })
@@ -192,16 +203,29 @@ export async function render({ route, me, api }) {
 
   // ── Metrics fetching (REST) ─────────────────────────────
   async function fetchMetrics() {
-    const ids = [...selectedIds];
-    if (!ids.length) return;
+    // Collect ALL trunk instance IDs (including duplicate edge instances)
+    const allIds = [...selectedIds].flatMap((id) => {
+      const t = allTrunks.find((tr) => tr.id === id);
+      return t?._allIds || [id];
+    });
+    if (!allIds.length) return;
 
-    for (let i = 0; i < ids.length; i += METRICS_BATCH_SIZE) {
-      const batch = ids.slice(i, i + METRICS_BATCH_SIZE);
+    for (let i = 0; i < allIds.length; i += METRICS_BATCH_SIZE) {
+      const batch = allIds.slice(i, i + METRICS_BATCH_SIZE);
       try {
         const res = await api.getTrunkMetrics(batch);
         const entities = res?.entities || res || [];
         for (const m of entities) {
-          if (m.trunk?.id) metricsMap.set(m.trunk.id, m);
+          const tid = m.trunk?.id;
+          if (!tid) continue;
+          // Map back to the representative (deduplicated) trunk
+          const rep = allTrunks.find((tr) => tr._allIds?.includes(tid));
+          const repId = rep?.id || tid;
+          const prev = metricsMap.get(repId);
+          // Keep whichever instance has the highest call activity
+          const mCalls = (m.calls?.inboundCallCount || 0) + (m.calls?.outboundCallCount || 0);
+          const pCalls = (prev?.calls?.inboundCallCount || 0) + (prev?.calls?.outboundCallCount || 0);
+          if (!prev || mCalls >= pCalls) metricsMap.set(repId, m);
         }
       } catch (e) {
         console.warn("Trunk metrics fetch failed:", e);
@@ -219,7 +243,12 @@ export async function render({ route, me, api }) {
 
   function updateSubscriptions() {
     if (!notifService) return;
-    const topics = [...selectedIds].flatMap((id) => [
+    // Subscribe to ALL instance IDs (including duplicates from multiple edges)
+    const allIds = [...selectedIds].flatMap((id) => {
+      const t = allTrunks.find((tr) => tr.id === id);
+      return t?._allIds || [id];
+    });
+    const topics = allIds.flatMap((id) => [
       `v2.telephony.providers.edges.trunks.${id}`,
       `v2.telephony.providers.edges.trunks.${id}.metrics`,
     ]);
@@ -232,16 +261,20 @@ export async function render({ route, me, api }) {
     const trunkIdx = parts.indexOf("trunks");
     if (trunkIdx < 0) return;
     const trunkId = parts[trunkIdx + 1];
-    if (!trunkId || !selectedIds.has(trunkId)) return;
+    if (!trunkId) return;
+
+    // Map the raw trunk instance ID back to the deduplicated representative
+    const rep = allTrunks.find((t) => t._allIds?.includes(trunkId));
+    const repId = rep?.id || trunkId;
+    if (!selectedIds.has(repId)) return;
 
     if (topicName.endsWith(".metrics")) {
-      metricsMap.set(trunkId, { ...metricsMap.get(trunkId), ...eventBody });
+      metricsMap.set(repId, { ...metricsMap.get(repId), ...eventBody });
     } else {
       // Trunk-level event — update connectedStatus + state on our cached object
-      const trunk = allTrunks.find((t) => t.id === trunkId);
-      if (trunk) {
-        if (eventBody.connectedStatus) trunk.connectedStatus = eventBody.connectedStatus;
-        if (eventBody.state) trunk.state = eventBody.state;
+      if (rep) {
+        if (eventBody.connectedStatus) rep.connectedStatus = eventBody.connectedStatus;
+        if (eventBody.state) rep.state = eventBody.state;
       }
     }
 
@@ -250,14 +283,33 @@ export async function render({ route, me, api }) {
 
   // ── Bootstrap ───────────────────────────────────────────
   try {
-    // 1. Load EXTERNAL trunk list only
-    allTrunks = await api.getAllTrunks({ trunkType: "EXTERNAL" });
-    allTrunks.sort((a, b) => a.name.localeCompare(b.name));
+    // 1. Load EXTERNAL trunk list and deduplicate by trunkBase
+    const rawTrunks = await api.getAllTrunks({ trunkType: "EXTERNAL" });
+    const groups = new Map();
+    for (const t of rawTrunks) {
+      t._cleanName = cleanTrunkName(t.name);
+      const key = t.trunkBase?.id || t._cleanName;
+      if (!groups.has(key)) {
+        groups.set(key, { trunk: t, allIds: [t.id] });
+      } else {
+        const g = groups.get(key);
+        g.allIds.push(t.id);
+        // Prefer the connected instance as representative
+        if (t.connectedStatus?.connected && !g.trunk.connectedStatus?.connected) {
+          g.trunk = t;
+        }
+      }
+    }
+    allTrunks = [...groups.values()].map(({ trunk, allIds }) => {
+      trunk._allIds = allIds;
+      return trunk;
+    });
+    allTrunks.sort((a, b) => a._cleanName.localeCompare(b._cleanName));
 
     renderFilterList();
     renderTable();
 
-    // 2. Start notification service
+    // 2. Start notification service (WebSocket for instant updates)
     notifService = new NotificationService({
       api,
       onEvent: handleNotification,
@@ -272,12 +324,17 @@ export async function render({ route, me, api }) {
         statusBadge.className = `pill trunk-status-badge trunk-status--${state}`;
       },
       pollFn: fetchMetrics,
-      pollInterval: 15_000,
+      pollInterval: POLL_INTERVAL_MS,
     });
 
     await notifService.connect();
     statusBadge.textContent = "Live";
     statusBadge.className = "pill trunk-status-badge trunk-status--connected";
+
+    // 3. Start periodic REST poll (belt-and-suspenders with WebSocket)
+    pollTimer = setInterval(() => {
+      if (selectedIds.size) fetchMetrics();
+    }, POLL_INTERVAL_MS);
   } catch (e) {
     statusBadge.textContent = "Error";
     statusBadge.className = "pill trunk-status-badge trunk-status--closed";
@@ -287,6 +344,7 @@ export async function render({ route, me, api }) {
   // ── Cleanup when page navigates away ────────────────────
   const observer = new MutationObserver(() => {
     if (!root.isConnected) {
+      if (pollTimer) clearInterval(pollTimer);
       notifService?.destroy();
       observer.disconnect();
     }

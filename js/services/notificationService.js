@@ -36,6 +36,7 @@ export class NotificationService {
     this._reconnectTimer = null;
     this._reconnectAttempts = 0;
     this._pollTimer = null;
+    this._pushTimer = null;
     this._destroyed = false;
     this._state = "closed";
   }
@@ -53,7 +54,7 @@ export class NotificationService {
     const newTopics = topics.filter((t) => !this._topics.has(t));
     if (!newTopics.length) return;
     newTopics.forEach((t) => this._topics.add(t));
-    this._sendSubscribe(newTopics);
+    this._debouncedPush();
   }
 
   /** Unsubscribe from one or more topic strings. */
@@ -61,16 +62,13 @@ export class NotificationService {
     const removed = topics.filter((t) => this._topics.has(t));
     if (!removed.length) return;
     removed.forEach((t) => this._topics.delete(t));
-    this._sendUnsubscribe(removed);
+    this._debouncedPush();
   }
 
-  /** Replace all subscriptions with a new set. */
+  /** Replace all subscriptions with a new set (via REST API). */
   setTopics(topics) {
-    const next = new Set(topics);
-    const toAdd = topics.filter((t) => !this._topics.has(t));
-    const toRemove = [...this._topics].filter((t) => !next.has(t));
-    if (toRemove.length) this.unsubscribe(toRemove);
-    if (toAdd.length) this.subscribe(toAdd);
+    this._topics = new Set(topics);
+    this._debouncedPush();
   }
 
   /** Tear down everything. */
@@ -106,9 +104,9 @@ export class NotificationService {
       this._startHeartbeat();
       this._stopPolling();
 
-      // Re-subscribe all current topics
+      // Re-subscribe all current topics via REST API
       if (this._topics.size) {
-        this._sendSubscribe([...this._topics]);
+        this._pushSubscriptions();
       }
     };
 
@@ -152,20 +150,20 @@ export class NotificationService {
     };
   }
 
-  _sendSubscribe(topics) {
-    if (this._ws?.readyState === WebSocket.OPEN) {
-      this._ws.send(
-        JSON.stringify({ message: "subscribe", topics }),
-      );
+  /** Push all current topics to the channel via REST API. */
+  async _pushSubscriptions() {
+    if (!this._channelId || this._destroyed) return;
+    try {
+      await this._api.setSubscriptions(this._channelId, [...this._topics]);
+    } catch (e) {
+      console.warn("Notification subscription push failed:", e);
     }
   }
 
-  _sendUnsubscribe(topics) {
-    if (this._ws?.readyState === WebSocket.OPEN) {
-      this._ws.send(
-        JSON.stringify({ message: "unsubscribe", topics }),
-      );
-    }
+  /** Debounce rapid topic changes into a single REST call. */
+  _debouncedPush() {
+    clearTimeout(this._pushTimer);
+    this._pushTimer = setTimeout(() => this._pushSubscriptions(), 300);
   }
 
   _startHeartbeat() {
@@ -226,6 +224,10 @@ export class NotificationService {
     if (this._reconnectTimer) {
       clearTimeout(this._reconnectTimer);
       this._reconnectTimer = null;
+    }
+    if (this._pushTimer) {
+      clearTimeout(this._pushTimer);
+      this._pushTimer = null;
     }
   }
 }
