@@ -82,9 +82,10 @@ export async function render({ route, me, api }) {
     <thead>
       <tr>
         <th>Trunk Name</th>
-        <th>Type</th>
         <th>Status</th>
-        <th>Active Calls</th>
+        <th>Inbound</th>
+        <th>Outbound</th>
+        <th>Total Calls</th>
         <th>Edge</th>
         <th>Updated</th>
       </tr>
@@ -146,14 +147,18 @@ export async function render({ route, me, api }) {
       .sort((a, b) => a.trunk.name.localeCompare(b.trunk.name));
 
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="trunk-empty">Select one or more trunks above</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="trunk-empty">Select one or more trunks above</td></tr>`;
       return;
     }
 
     tbody.innerHTML = rows
       .map(({ trunk, m }) => {
         const status = resolveStatus(trunk, m);
-        const calls = m?.calls?.inProgress ?? m?.activeCalls ?? "—";
+        const inbound  = m?.calls?.inboundCallCount  ?? "—";
+        const outbound = m?.calls?.outboundCallCount ?? "—";
+        const total = (typeof inbound === "number" && typeof outbound === "number")
+          ? inbound + outbound
+          : "—";
         const edge = trunk.edge?.name || trunk.edgeGroup?.name || "—";
         const updated = m
           ? new Date(m.eventTime || Date.now()).toLocaleTimeString()
@@ -161,9 +166,10 @@ export async function render({ route, me, api }) {
 
         return `<tr>
           <td>${escapeHtml(trunk.name)}</td>
-          <td>${escapeHtml(trunk.trunkType || "—")}</td>
           <td><span class="trunk-dot trunk-dot--${status.color}"></span> ${escapeHtml(status.label)}</td>
-          <td>${escapeHtml(String(calls))}</td>
+          <td>${escapeHtml(String(inbound))}</td>
+          <td>${escapeHtml(String(outbound))}</td>
+          <td>${escapeHtml(String(total))}</td>
           <td>${escapeHtml(edge)}</td>
           <td>${escapeHtml(updated)}</td>
         </tr>`;
@@ -171,15 +177,17 @@ export async function render({ route, me, api }) {
       .join("");
   }
 
-  function resolveStatus(trunk, metrics) {
-    const connected =
-      metrics?.connectedStatus?.connected ??
-      metrics?.connected ??
-      trunk?.state === "connected";
+  function resolveStatus(trunk, _metrics) {
+    // connectedStatus lives on the Trunk object from the list endpoint,
+    // NOT on TrunkMetrics.  Trunk.state is "active"/"inactive"/"deleted".
+    const cs = trunk?.connectedStatus;
+    if (cs?.connected === true)  return { label: "Connected",    color: "green" };
+    if (cs?.connected === false) return { label: "Disconnected", color: "red" };
 
-    if (connected === true) return { label: "Connected", color: "green" };
-    if (connected === false) return { label: "Disconnected", color: "red" };
-    return { label: trunk.state ?? "Unknown", color: "gray" };
+    // Fallback: treat inService / enabled flags
+    if (trunk?.inService && trunk?.enabled) return { label: "In Service", color: "green" };
+
+    return { label: trunk?.state ?? "Unknown", color: "gray" };
   }
 
   // ── Metrics fetching (REST) ─────────────────────────────
@@ -229,8 +237,12 @@ export async function render({ route, me, api }) {
     if (topicName.endsWith(".metrics")) {
       metricsMap.set(trunkId, { ...metricsMap.get(trunkId), ...eventBody });
     } else {
+      // Trunk-level event — update connectedStatus + state on our cached object
       const trunk = allTrunks.find((t) => t.id === trunkId);
-      if (trunk && eventBody.state) trunk.state = eventBody.state;
+      if (trunk) {
+        if (eventBody.connectedStatus) trunk.connectedStatus = eventBody.connectedStatus;
+        if (eventBody.state) trunk.state = eventBody.state;
+      }
     }
 
     renderTable();
@@ -238,8 +250,8 @@ export async function render({ route, me, api }) {
 
   // ── Bootstrap ───────────────────────────────────────────
   try {
-    // 1. Load trunk list
-    allTrunks = await api.getAllTrunks();
+    // 1. Load EXTERNAL trunk list only
+    allTrunks = await api.getAllTrunks({ trunkType: "EXTERNAL" });
     allTrunks.sort((a, b) => a.name.localeCompare(b.name));
 
     renderFilterList();
