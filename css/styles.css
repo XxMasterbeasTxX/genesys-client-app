@@ -288,3 +288,26 @@ body {
   border-top: 2px solid var(--border);
   background: var(--surface-alt, rgba(255,255,255,0.04));
 }
+
+/* ── Threshold warning ─────────────────────────────────── */
+.trunk-threshold-banner {
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  font-weight: 600;
+  font-size: 14px;
+  animation: pulse-warn 1.5s ease-in-out infinite;
+}
+.trunk-threshold-banner.hidden { display: none; }
+
+@keyframes pulse-warn {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .65; }
+}
+
+.trunk-total-row--warn td {
+  color: #fca5a5 !important;
+  background: rgba(239, 68, 68, 0.12);
+}

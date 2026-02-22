@@ -66,6 +66,14 @@ export const NAV_TREE = [
       },
     ],
   },
+  {
+    label: "Wallboards",
+    path: "wallboards",
+    enabled: true,
+    children: [
+      { label: "Placeholder", path: "placeholder", enabled: true },
+    ],
+  },
 ];
 
 /** Collect all leaf routes from enabled nodes only. */

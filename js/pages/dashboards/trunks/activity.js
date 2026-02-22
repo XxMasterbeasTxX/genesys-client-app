@@ -13,6 +13,10 @@ const METRICS_BATCH_SIZE = 100;
 // Polling interval for periodic metric refresh (ms)
 const POLL_INTERVAL_MS = 15_000;
 
+// ── Threshold: warn when total concurrent calls reaches this number ───
+// Set to 1 for testing (any active call triggers). Change per customer before deploying.
+const CALL_THRESHOLD = 1;
+
 /**
  * Strip trailing UUID / ID suffix from trunk names returned by the API.
  * E.g. "MyTrunk_abc12345-def6-7890-abcd-ef1234567890" → "MyTrunk"
@@ -33,6 +37,8 @@ export async function render({ route, me, api }) {
   let metricsMap = new Map();    // trunkId → latest metrics object
   let notifService = null;
   let pollTimer = null;          // periodic REST poll handle
+  let tabFlashTimer = null;      // tab title flash interval
+  const originalTitle = document.title;
 
   // ── DOM skeleton ────────────────────────────────────────
   const root = document.createElement("div");
@@ -51,6 +57,11 @@ export async function render({ route, me, api }) {
   statusBadge.textContent = "Loading…";
 
   header.append(title, statusBadge);
+
+  // Threshold warning banner (hidden by default)
+  const warningBanner = document.createElement("div");
+  warningBanner.className = "trunk-threshold-banner hidden";
+  warningBanner.setAttribute("role", "alert");
 
   // Filter section
   const filterSection = document.createElement("section");
@@ -106,7 +117,7 @@ export async function render({ route, me, api }) {
   `;
   tableSection.append(table);
 
-  root.append(header, filterSection, tableSection);
+  root.append(header, warningBanner, filterSection, tableSection);
 
   // ── Helper: render the filter checkbox list ─────────────
   function renderFilterList() {
@@ -190,13 +201,16 @@ export async function render({ route, me, api }) {
       if (typeof ib === "number") { sumIn += ib; hasAny = true; }
       if (typeof ob === "number") { sumOut += ob; hasAny = true; }
     }
-    tbody.innerHTML += `<tr class="trunk-total-row">
+    tbody.innerHTML += `<tr class="trunk-total-row${breached ? ' trunk-total-row--warn' : ''}">
       <td><strong>Total</strong></td>
       <td></td>
       <td><strong>${hasAny ? sumIn : "—"}</strong></td>
       <td><strong>${hasAny ? sumOut : "—"}</strong></td>
       <td><strong>${hasAny ? sumIn + sumOut : "—"}</strong></td>
     </tr>`;
+
+    // ── Threshold check ─────────────────────────────────
+    checkThreshold(hasAny ? sumIn + sumOut : 0);
   }
 
   function resolveStatus(trunk, _metrics) {
@@ -210,6 +224,52 @@ export async function render({ route, me, api }) {
     if (trunk?.inService && trunk?.enabled) return { label: "In Service", color: "green" };
 
     return { label: trunk?.state ?? "Unknown", color: "gray" };
+  }
+
+  // ── Threshold warning logic ──────────────────────────────
+  let breached = false;
+
+  function checkThreshold(totalCalls) {
+    const nowBreached = CALL_THRESHOLD > 0 && totalCalls >= CALL_THRESHOLD;
+
+    if (nowBreached && !breached) {
+      // Started breaching
+      breached = true;
+      warningBanner.textContent = `⚠ THRESHOLD EXCEEDED: ${totalCalls} / ${CALL_THRESHOLD} concurrent calls`;
+      warningBanner.classList.remove("hidden");
+      startTabFlash(totalCalls);
+    } else if (nowBreached && breached) {
+      // Still breaching — update numbers
+      warningBanner.textContent = `⚠ THRESHOLD EXCEEDED: ${totalCalls} / ${CALL_THRESHOLD} concurrent calls`;
+      updateTabFlash(totalCalls);
+    } else if (!nowBreached && breached) {
+      // Recovered
+      breached = false;
+      warningBanner.classList.add("hidden");
+      stopTabFlash();
+    }
+  }
+
+  function startTabFlash(totalCalls) {
+    stopTabFlash();
+    let show = true;
+    tabFlashTimer = setInterval(() => {
+      document.title = show ? `⚠ ${totalCalls} CALLS — Threshold Exceeded` : originalTitle;
+      show = !show;
+    }, 1000);
+  }
+
+  function updateTabFlash(totalCalls) {
+    // Restart with updated count
+    if (tabFlashTimer) startTabFlash(totalCalls);
+  }
+
+  function stopTabFlash() {
+    if (tabFlashTimer) {
+      clearInterval(tabFlashTimer);
+      tabFlashTimer = null;
+    }
+    document.title = originalTitle;
   }
 
   // ── Metrics fetching (REST) ─────────────────────────────
@@ -356,6 +416,7 @@ export async function render({ route, me, api }) {
   const observer = new MutationObserver(() => {
     if (!root.isConnected) {
       if (pollTimer) clearInterval(pollTimer);
+      stopTabFlash();
       notifService?.destroy();
       observer.disconnect();
     }
