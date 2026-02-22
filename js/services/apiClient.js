@@ -27,5 +27,52 @@ export function createApiClient(getAccessToken) {
 
   return {
     getUsersMe: () => request("/api/v2/users/me"),
+
+    // ── Trunks ────────────────────────────────────────────────
+    /** Fetch a single page of trunks. */
+    getTrunksPage: ({ page = 1, pageSize = 100, trunkType } = {}) => {
+      const qs = new URLSearchParams({ pageNumber: page, pageSize });
+      if (trunkType) qs.set("trunkType", trunkType);
+      return request(`/api/v2/telephony/providers/edges/trunks?${qs}`);
+    },
+
+    /** Fetch ALL trunks (auto-paginates). */
+    getAllTrunks: async (opts = {}) => {
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+      while (all.length < total) {
+        const res = await request(
+          `/api/v2/telephony/providers/edges/trunks?${new URLSearchParams({
+            pageNumber: page,
+            pageSize: 100,
+            ...(opts.trunkType ? { trunkType: opts.trunkType } : {}),
+          })}`,
+        );
+        total = res.total ?? res.entities?.length ?? 0;
+        if (res.entities) all.push(...res.entities);
+        if (!res.entities?.length) break;
+        page++;
+      }
+      return all;
+    },
+
+    /** Fetch metrics for a list of trunk IDs (max ~100 per call). */
+    getTrunkMetrics: (trunkIds) =>
+      request(
+        `/api/v2/telephony/providers/edges/trunks/metrics?trunkIds=${trunkIds.join(",")}`,
+      ),
+
+    // ── Notifications ─────────────────────────────────────────
+    /** Create a new notification channel (returns { id, connectUri }). */
+    createNotificationChannel: () =>
+      request("/api/v2/notifications/channels", { method: "POST" }),
+
+    /** Replace existing subscriptions with a new list. */
+    setSubscriptions: (channelId, topics) =>
+      request(`/api/v2/notifications/channels/${channelId}/subscriptions`, {
+        method: "PUT",
+        body: topics.map((id) => ({ id })),
+      }),
   };
 }
