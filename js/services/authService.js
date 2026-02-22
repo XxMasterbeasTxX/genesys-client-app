@@ -9,6 +9,38 @@ const K_OAUTH_STATE   = "oauth_state";
 // Use a small skew to avoid using a token that's about to expire mid-request
 const EXPIRY_SKEW_MS = 60 * 1000;
 
+// Key for cross-tab session handoff via localStorage
+const K_HANDOFF = "gc_tab_handoff";
+
+/**
+ * Save current session to localStorage so a new tab can pick it up.
+ * The handoff is consumed (deleted) by the receiving tab.
+ */
+export function saveTabHandoff() {
+  const token = sessionStorage.getItem(K_ACCESS_TOKEN);
+  const expiresAt = sessionStorage.getItem(K_EXPIRES_AT);
+  if (!token || !expiresAt) return;
+  localStorage.setItem(K_HANDOFF, JSON.stringify({ token, expiresAt, ts: Date.now() }));
+}
+
+/**
+ * If this tab has no session but a handoff exists in localStorage,
+ * import it into sessionStorage and remove the handoff.
+ */
+function consumeTabHandoff() {
+  if (sessionStorage.getItem(K_ACCESS_TOKEN)) return; // already have a session
+  const raw = localStorage.getItem(K_HANDOFF);
+  if (!raw) return;
+  try {
+    const { token, expiresAt, ts } = JSON.parse(raw);
+    // Only accept handoffs less than 30 seconds old
+    if (Date.now() - ts > 30_000) { localStorage.removeItem(K_HANDOFF); return; }
+    sessionStorage.setItem(K_ACCESS_TOKEN, token);
+    sessionStorage.setItem(K_EXPIRES_AT, expiresAt);
+  } catch (_) { /* ignore corrupt data */ }
+  localStorage.removeItem(K_HANDOFF);
+}
+
 // --- UTILS ---
 function qp() { return new URLSearchParams(window.location.search); }
 
@@ -138,6 +170,9 @@ async function usersMe(accessToken) {
  *  { status:"redirecting" }
  */
 export async function ensureAuthenticatedWithMe() {
+  // Check for cross-tab session handoff
+  consumeTabHandoff();
+
   const p = qp();
 
   // A) Returned with a code

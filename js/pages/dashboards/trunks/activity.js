@@ -6,6 +6,7 @@
  */
 import { NotificationService } from "../../../services/notificationService.js";
 import { escapeHtml } from "../../../utils.js";
+import { saveTabHandoff } from "../../../services/authService.js";
 
 // How many trunk IDs to batch per metrics REST call
 const METRICS_BATCH_SIZE = 100;
@@ -221,7 +222,9 @@ export async function render({ route, me, api }) {
   popoutBtn.className = "btn btn-sm trunk-popout-toggle";
   popoutBtn.textContent = "↗ Open in new tab";
   popoutBtn.addEventListener("click", () => {
+    saveTabHandoff();
     const url = new URL(window.location.href);
+    url.search = ""; // clear any existing query params
     url.searchParams.set("fs", "1");
     url.hash = "#dashboards/trunks/activity";
     window.open(url.toString(), "_blank");
