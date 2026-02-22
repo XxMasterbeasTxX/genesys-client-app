@@ -1,13 +1,25 @@
-function normalizeHashRoute() {
-  const hash = window.location.hash || "#/";
-  const route = hash.startsWith("#") ? hash.slice(1) : hash; // "/dashboards"
-  return route.length ? route : "/";
+/**
+ * Simple hash-based router.
+ *
+ * The `resolve` callback receives a route string and must return
+ * a Promise<HTMLElement> that will be placed in the outlet.
+ */
+function getRouteFromHash() {
+  const hash = window.location.hash || "";
+  const route = hash.startsWith("#") ? hash.slice(1) : hash;
+  return route || "/";
 }
 
 export class Router {
-  constructor({ outletEl, routes, onRouteChanged }) {
+  /**
+   * @param {Object}   opts
+   * @param {Element}  opts.outletEl         Target container element.
+   * @param {Function} opts.resolve          (route: string) => Promise<HTMLElement>
+   * @param {Function} [opts.onRouteChanged] Called after each render with the current route.
+   */
+  constructor({ outletEl, resolve, onRouteChanged }) {
     this.outletEl = outletEl;
-    this.routes = routes; // { "/dashboards": async()=>HTMLElement, "/404": ... }
+    this.resolve = resolve;
     this.onRouteChanged = onRouteChanged;
     this._bound = () => this.render();
   }
@@ -22,13 +34,10 @@ export class Router {
   }
 
   async render() {
-    const route = normalizeHashRoute();
-    const loader = this.routes[route] || this.routes["/404"];
-    const viewEl = await loader({ route });
-
+    const route = getRouteFromHash();
+    const viewEl = await this.resolve(route);
     this.outletEl.replaceChildren(viewEl);
     this.outletEl.focus?.();
-
     this.onRouteChanged?.(route);
   }
 }

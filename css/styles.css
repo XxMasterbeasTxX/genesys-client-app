@@ -67,19 +67,70 @@ body {
   overflow: auto;
 }
 
-.nav-item {
-  display: block;
-  padding: 10px 10px;
-  border-radius: 12px;
-  color: var(--text);
-  text-decoration: none;
-  border: 1px solid transparent;
+/* ── Nested nav tree ──────────────────────────────────── */
+.nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
-.nav-item:hover {
+
+.nav-group > .nav-list {
+  display: none;
+  padding-left: 12px;
+}
+
+.nav-group.open > .nav-list {
+  display: block;
+}
+
+.nav-folder {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.nav-folder:hover {
   background: rgba(255,255,255,0.04);
   border-color: var(--border);
 }
-.nav-item.active {
+
+.nav-chevron {
+  display: inline-block;
+  width: 14px;
+  text-align: center;
+  font-size: 14px;
+  transition: transform 0.15s ease;
+}
+
+.nav-group.open > .nav-folder .nav-chevron {
+  transform: rotate(90deg);
+}
+
+.nav-leaf {
+  display: block;
+  padding: 7px 10px 7px 28px;
+  border-radius: 10px;
+  color: var(--text);
+  text-decoration: none;
+  border: 1px solid transparent;
+  font-size: 13px;
+}
+
+.nav-leaf:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: var(--border);
+}
+
+.nav-leaf.active {
   background: rgba(255,255,255,0.06);
   border-color: rgba(255,255,255,0.14);
 }

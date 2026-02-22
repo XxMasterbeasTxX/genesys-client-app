@@ -1,6 +1,8 @@
 import { CONFIG } from "./config.js";
+import { NAV_TREE, getDefaultRoute, getFirstLeafUnder } from "./navConfig.js";
+import { createNav } from "./nav.js";
 import { Router } from "./router.js";
-import { renderDashboardsPage } from "./pages/dashboards.js";
+import { getPageLoader } from "./pageRegistry.js";
 import { renderNotFoundPage } from "./pages/notfound.js";
 import { escapeHtml } from "./utils.js";
 import {
@@ -12,20 +14,13 @@ import { createApiClient } from "./services/apiClient.js";
 
 function setHeader({ authText }) {
   document.getElementById("brandTitle").textContent = CONFIG.appName;
-  document.getElementById("envSubtitle").textContent = `${CONFIG.region}`;
+  document.getElementById("envSubtitle").textContent = CONFIG.region;
   document.getElementById("authPill").textContent = authText;
-}
-
-function setActiveNav(route) {
-  document.querySelectorAll(".nav-item").forEach(a => {
-    const r = a.getAttribute("data-route");
-    a.classList.toggle("active", r === route);
-  });
 }
 
 function ensureDefaultRoute() {
   if (!window.location.hash || window.location.hash === "#") {
-    window.location.hash = "#/dashboards";
+    window.location.hash = `#${getDefaultRoute()}`;
   }
 }
 
@@ -52,32 +47,46 @@ function renderFatalError(message) {
     return;
   }
 
-  // Auth OK
   const userName = res.me?.name || "user";
-  setHeader({ authText: `Auth: ok · ${userName}` });
+  setHeader({ authText: `Auth: ok \u00B7 ${userName}` });
 
-  // --- Create a shared API client for all pages ---
+  // --- API client ---
   const api = createApiClient(getValidAccessToken);
 
-  // --- Proactive session monitoring ---
+  // --- Session monitoring ---
   scheduleTokenRefresh({
     onExpiringSoon: (secsLeft) => {
-      setHeader({ authText: `Auth: ok · ${userName} · session expires in ${secsLeft}s` });
+      setHeader({
+        authText: `Auth: ok \u00B7 ${userName} \u00B7 session expires in ${secsLeft}s`,
+      });
     },
     onSessionExpired: () => {
-      setHeader({ authText: "Auth: session expired — redirecting…" });
+      setHeader({ authText: "Auth: session expired \u2014 redirecting\u2026" });
     },
   });
+
+  // --- Build navigation ---
+  const navEl = document.getElementById("appNav");
+  const nav = createNav(navEl, NAV_TREE);
 
   // --- Start router ---
   const outletEl = document.getElementById("appMain");
   const router = new Router({
     outletEl,
-    routes: {
-      "/dashboards": async () => renderDashboardsPage({ me: res.me, api }),
-      "/404": async (ctx) => renderNotFoundPage(ctx),
+    resolve: async (route) => {
+      const loader = getPageLoader(route);
+      if (loader) return loader({ route, me: res.me, api });
+
+      // Folder prefix? Redirect to its first leaf.
+      const firstLeaf = getFirstLeafUnder(route);
+      if (firstLeaf) {
+        window.location.hash = `#${firstLeaf}`;
+        return document.createElement("div");
+      }
+
+      return renderNotFoundPage({ route });
     },
-    onRouteChanged: (route) => setActiveNav(route),
+    onRouteChanged: (route) => nav.updateActive(route),
   });
 
   router.start();
