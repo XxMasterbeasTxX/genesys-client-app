@@ -221,7 +221,10 @@ export async function render({ route, me, api }) {
   popoutBtn.className = "btn btn-sm trunk-popout-toggle";
   popoutBtn.textContent = "↗ Open in new tab";
   popoutBtn.addEventListener("click", () => {
-    window.open(window.location.href, "_blank");
+    const url = new URL(window.location.href);
+    url.searchParams.set("fs", "1");
+    url.hash = "#dashboards/trunks/activity";
+    window.open(url.toString(), "_blank");
   });
 
   header.append(fullscreenBtn, popoutBtn);
@@ -679,6 +682,17 @@ export async function render({ route, me, api }) {
     await notifService.connect();
     statusBadge.textContent = "Live";
     statusBadge.className = "pill trunk-status-badge trunk-status--connected";
+
+    // Auto-fullscreen when opened via popout button (?fs=1)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("fs") === "1") {
+      root.requestFullscreen().catch(() => {
+        // Fallback to CSS maximized if native fails
+        isMaximized = true;
+        root.classList.add("trunk-activity--fullscreen");
+        syncFullscreenLabel(true);
+      });
+    }
   } catch (e) {
     statusBadge.textContent = "Error";
     statusBadge.className = "pill trunk-status-badge trunk-status--closed";
