@@ -165,6 +165,27 @@ export async function render({ route, me, api }) {
   });
   header.append(graphToggleBtn);
 
+  // Fullscreen toggle button (in header)
+  const fullscreenBtn = document.createElement("button");
+  fullscreenBtn.className = "btn btn-sm trunk-fullscreen-toggle";
+  fullscreenBtn.textContent = "⛶ Fullscreen";
+  fullscreenBtn.addEventListener("click", () => {
+    if (document.fullscreenElement === root) {
+      document.exitFullscreen();
+    } else {
+      root.requestFullscreen().catch((e) => console.warn("Fullscreen denied:", e));
+    }
+  });
+
+  function onFullscreenChange() {
+    const isFs = document.fullscreenElement === root;
+    fullscreenBtn.textContent = isFs ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
+    root.classList.toggle("trunk-activity--fullscreen", isFs);
+  }
+  document.addEventListener("fullscreenchange", onFullscreenChange);
+
+  header.append(fullscreenBtn);
+
   root.append(header, warningBanner, filterSection, graphSection, tableSection);
 
   // ── Helper: render the filter checkbox list ─────────────
@@ -622,6 +643,7 @@ export async function render({ route, me, api }) {
       if (pollTimer) clearInterval(pollTimer);
       stopTabFlash();
       if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
       notifService?.destroy();
       observer.disconnect();
     }

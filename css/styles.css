@@ -351,3 +351,13 @@ body {
 .trunk-graph-toggle {
   margin-left: auto;
 }
+
+/* ── Fullscreen mode ───────────────────────────────────── */
+.trunk-activity--fullscreen {
+  background: var(--bg);
+  padding: var(--pad);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
