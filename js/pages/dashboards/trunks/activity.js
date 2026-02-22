@@ -165,24 +165,26 @@ export async function render({ route, me, api }) {
   });
   header.append(graphToggleBtn);
 
-  // Fullscreen toggle button (in header)
+  // Fullscreen (maximized) toggle button (in header)
+  let isMaximized = false;
   const fullscreenBtn = document.createElement("button");
   fullscreenBtn.className = "btn btn-sm trunk-fullscreen-toggle";
   fullscreenBtn.textContent = "⛶ Fullscreen";
   fullscreenBtn.addEventListener("click", () => {
-    if (document.fullscreenElement === root) {
-      document.exitFullscreen();
-    } else {
-      root.requestFullscreen().catch((e) => console.warn("Fullscreen denied:", e));
-    }
+    isMaximized = !isMaximized;
+    root.classList.toggle("trunk-activity--fullscreen", isMaximized);
+    fullscreenBtn.textContent = isMaximized ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
   });
 
-  function onFullscreenChange() {
-    const isFs = document.fullscreenElement === root;
-    fullscreenBtn.textContent = isFs ? "⛶ Exit Fullscreen" : "⛶ Fullscreen";
-    root.classList.toggle("trunk-activity--fullscreen", isFs);
+  // Allow Escape key to exit maximized mode
+  function onEscKey(e) {
+    if (e.key === "Escape" && isMaximized) {
+      isMaximized = false;
+      root.classList.remove("trunk-activity--fullscreen");
+      fullscreenBtn.textContent = "⛶ Fullscreen";
+    }
   }
-  document.addEventListener("fullscreenchange", onFullscreenChange);
+  document.addEventListener("keydown", onEscKey);
 
   header.append(fullscreenBtn);
 
@@ -618,6 +620,19 @@ export async function render({ route, me, api }) {
         };
         statusBadge.textContent = labels[state] || state;
         statusBadge.className = `pill trunk-status-badge trunk-status--${state}`;
+
+        // Only poll when WebSocket is not connected
+        if (state === "connected") {
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        } else {
+          if (!pollTimer) {
+            pollTimer = setInterval(() => {
+              if (selectedIds.size) fetchMetrics();
+            }, POLL_INTERVAL_MS);
+            // Fetch immediately on fallback start
+            if (selectedIds.size) fetchMetrics();
+          }
+        }
       },
       pollFn: fetchMetrics,
       pollInterval: POLL_INTERVAL_MS,
@@ -626,11 +641,6 @@ export async function render({ route, me, api }) {
     await notifService.connect();
     statusBadge.textContent = "Live";
     statusBadge.className = "pill trunk-status-badge trunk-status--connected";
-
-    // 3. Start periodic REST poll (belt-and-suspenders with WebSocket)
-    pollTimer = setInterval(() => {
-      if (selectedIds.size) fetchMetrics();
-    }, POLL_INTERVAL_MS);
   } catch (e) {
     statusBadge.textContent = "Error";
     statusBadge.className = "pill trunk-status-badge trunk-status--closed";
@@ -643,7 +653,7 @@ export async function render({ route, me, api }) {
       if (pollTimer) clearInterval(pollTimer);
       stopTabFlash();
       if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
-      document.removeEventListener("fullscreenchange", onFullscreenChange);
+      document.removeEventListener("keydown", onEscKey);
       notifService?.destroy();
       observer.disconnect();
     }
