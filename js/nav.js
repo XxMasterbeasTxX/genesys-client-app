@@ -40,10 +40,17 @@ function buildList(nodes, parentPath) {
   ul.className = "nav-list";
 
   for (const node of nodes) {
+    // Skip disabled nodes
+    if (node.enabled === false) continue;
+
     const fullPath = `${parentPath}/${node.path}`;
     const li = document.createElement("li");
 
     if (node.children?.length) {
+      // Filter to enabled children only
+      const enabledChildren = node.children.filter((c) => c.enabled !== false);
+      if (!enabledChildren.length) continue; // hide folder if all children disabled
+
       // Folder
       li.className = "nav-group";
 
@@ -58,7 +65,7 @@ function buildList(nodes, parentPath) {
       btn.append(chevron, document.createTextNode(` ${node.label}`));
       btn.addEventListener("click", () => li.classList.toggle("open"));
 
-      li.append(btn, buildList(node.children, fullPath));
+      li.append(btn, buildList(enabledChildren, fullPath));
     } else {
       // Leaf
       const a = document.createElement("a");
