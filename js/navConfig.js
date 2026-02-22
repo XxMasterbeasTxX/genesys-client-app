@@ -29,7 +29,7 @@ export const NAV_TREE = [
         path: "agents",
         enabled: true,
         children: [
-          { label: "Placeholder", path: "placeholder", enabled: true },
+          { label: "Placeholder", path: "placeholder", enabled: false },
         ],
       },
       {
@@ -37,7 +37,7 @@ export const NAV_TREE = [
         path: "callbacks",
         enabled: true,
         children: [
-          { label: "Placeholder", path: "placeholder", enabled: true },
+          { label: "Placeholder", path: "placeholder", enabled: false },
         ],
       },
       {
@@ -45,7 +45,7 @@ export const NAV_TREE = [
         path: "callflows",
         enabled: true,
         children: [
-          { label: "Placeholder", path: "placeholder", enabled: true },
+          { label: "Placeholder", path: "placeholder", enabled: false },
         ],
       },
       {
@@ -53,7 +53,7 @@ export const NAV_TREE = [
         path: "queues",
         enabled: true,
         children: [
-          { label: "Placeholder", path: "placeholder", enabled: true },
+          { label: "Placeholder", path: "placeholder", enabled: false },
         ],
       },
       {
@@ -71,7 +71,7 @@ export const NAV_TREE = [
     path: "wallboards",
     enabled: true,
     children: [
-      { label: "Placeholder", path: "placeholder", enabled: true },
+      { label: "Placeholder", path: "placeholder", enabled: false },
     ],
   },
 ];
