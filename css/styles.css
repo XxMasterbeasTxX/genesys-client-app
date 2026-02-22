@@ -311,3 +311,43 @@ body {
   color: #fca5a5 !important;
   background: rgba(239, 68, 68, 0.12);
 }
+
+/* ── Graph section ─────────────────────────────────────── */
+.trunk-graph-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.trunk-graph-section.hidden { display: none; }
+
+.trunk-graph-toolbar {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.trunk-graph-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+
+.trunk-graph-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--muted);
+}
+.trunk-graph-picker-item input:checked + span { color: var(--text); }
+
+.trunk-graph-canvas {
+  width: 100%;
+  min-height: 220px;
+  max-height: 320px;
+}
+
+.trunk-graph-toggle {
+  margin-left: auto;
+}

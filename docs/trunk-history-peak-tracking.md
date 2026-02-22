@@ -20,7 +20,7 @@
 ### Why the Genesys Analytics API can't do this
 
 | API Endpoint | What it provides | Why it doesn't fit |
-|---|---|---|
+| --- | --- | --- |
 | `POST /api/v2/analytics/conversations/aggregates/query` | Interval totals (nConnected, nOffered) grouped by dimensions | Returns **total calls per bucket**, not concurrent call count. Also lacks `trunkId` dimension — only `edgeId`, which merges multiple trunks per edge. |
 | `POST /api/v2/analytics/conversations/activity/query` | Real-time observations (oInteracting, oWaiting) | **Point-in-time only** — shows current state, no historical query capability. |
 | `POST /api/v2/analytics/conversations/details/query` | Individual conversation records with timestamps | Could theoretically reconstruct concurrency by overlapping start/end times, but requires fetching every conversation record (100K+/month = heavy pagination). Brittle and API-heavy. |
@@ -39,7 +39,7 @@ A lightweight serverless backend that periodically snapshots current trunk concu
 
 ### Architecture
 
-```
+```text
 ┌──────────────────────┐       every 5 min        ┌─────────────────────┐
 │  Azure Function      │ ◄──── Timer Trigger ────► │  Genesys Cloud API  │
 │  (collectTrunkMetrics)│                           │  /trunks/metrics    │
@@ -68,7 +68,7 @@ A lightweight serverless backend that periodically snapshots current trunk concu
 ### Data model (Azure Table Storage)
 
 | Field | Value | Example |
-|---|---|---|
+| --- | --- | --- |
 | `PartitionKey` | Year-month (efficient range queries) | `2026-01` |
 | `RowKey` | ISO 8601 timestamp (natural sort) | `20260115T103000Z` |
 | `totalCalls` | Sum of concurrent calls across all external trunks | `47` |
@@ -77,7 +77,7 @@ A lightweight serverless backend that periodically snapshots current trunk concu
 ### Storage estimates
 
 | Interval | Rows/month | Size/month | Size/year |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 minute | ~43,200 | ~2 MB | ~25 MB |
 | 5 minutes | ~8,640 | ~0.5 MB | ~5 MB |
 
@@ -86,7 +86,7 @@ A lightweight serverless backend that periodically snapshots current trunk concu
 ## Azure Resources Required
 
 | Resource | Purpose | Cost |
-|---|---|---|
+| --- | --- | --- |
 | **Azure Function App** (Consumption plan) | Hosts both timer + HTTP functions | Free tier: 1M executions/month included. ~8.6K–43K executions/month = well within free tier |
 | **Azure Table Storage** | Stores time-series data | ~$0.045/GB/month. Negligible at this scale |
 | **Azure Static Web Apps** | Already in place — hosts SPA and can link the Function App as its `/api` backend | Already deployed |
@@ -109,7 +109,7 @@ A lightweight serverless backend that periodically snapshots current trunk concu
 ## SPA Changes Required
 
 | Item | Change |
-|---|---|
+| --- | --- |
 | **New nav item** | Trunks → History (in `navConfig.js`) |
 | **New page** | `js/pages/dashboards/trunks/history.js` — date range picker, chart, peak summary |
 | **Chart library** | Add Chart.js or similar (CDN or bundled) |
@@ -120,7 +120,7 @@ A lightweight serverless backend that periodically snapshots current trunk concu
 
 ## Project Structure (new files)
 
-```
+```text
 api/
   collectTrunkMetrics/
     index.js              ← Timer trigger: polls Genesys, writes to Table Storage

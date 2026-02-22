@@ -13,6 +13,15 @@ const METRICS_BATCH_SIZE = 100;
 // Polling interval for periodic metric refresh (ms)
 const POLL_INTERVAL_MS = 15_000;
 
+// How many data-points to keep in the rolling chart history
+const CHART_HISTORY_MAX = 120;
+
+// Palette for per-trunk chart lines
+const CHART_COLOURS = [
+  "#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7",
+  "#06b6d4", "#ec4899", "#14b8a6", "#f97316", "#6366f1",
+];
+
 // ── Threshold: warn when total concurrent calls reaches this number ───
 // Set to 1 for testing (any active call triggers). Change per customer before deploying.
 const CALL_THRESHOLD = 1;
@@ -35,6 +44,10 @@ export async function render({ route, me, api }) {
   let allTrunks = [];            // full list from API (deduplicated)
   let selectedIds = new Set();   // trunk IDs the user wants to see
   let metricsMap = new Map();    // trunkId → latest metrics object
+  let chartHistory = [];          // [{ ts, perTrunk: { id→total }, total }]
+  let chartTrunkIds = new Set();  // which trunks to graph (empty = "All")
+  let chartVisible = false;       // graph panel shown?
+  let chartInstance = null;       // Chart.js instance
   let notifService = null;
   let pollTimer = null;          // periodic REST poll handle
   let tabFlashTimer = null;      // tab title flash interval
@@ -117,7 +130,42 @@ export async function render({ route, me, api }) {
   `;
   tableSection.append(table);
 
-  root.append(header, warningBanner, filterSection, tableSection);
+  // ── Graph section ──────────────────────────────────────
+  const graphSection = document.createElement("section");
+  graphSection.className = "card trunk-graph-section hidden";
+
+  // Graph toolbar: trunk picker
+  const graphToolbar = document.createElement("div");
+  graphToolbar.className = "trunk-graph-toolbar";
+
+  const graphPickerLabel = document.createElement("span");
+  graphPickerLabel.className = "trunk-filter-label";
+  graphPickerLabel.textContent = "Graph trunks";
+
+  const graphPickerList = document.createElement("div");
+  graphPickerList.className = "trunk-graph-picker";
+
+  graphToolbar.append(graphPickerLabel, graphPickerList);
+
+  const canvas = document.createElement("canvas");
+  canvas.className = "trunk-graph-canvas";
+  canvas.height = 260;
+
+  graphSection.append(graphToolbar, canvas);
+
+  // Toggle graph button (in header)
+  const graphToggleBtn = document.createElement("button");
+  graphToggleBtn.className = "btn btn-sm trunk-graph-toggle";
+  graphToggleBtn.textContent = "📈 Show Graph";
+  graphToggleBtn.addEventListener("click", () => {
+    chartVisible = !chartVisible;
+    graphSection.classList.toggle("hidden", !chartVisible);
+    graphToggleBtn.textContent = chartVisible ? "📈 Hide Graph" : "📈 Show Graph";
+    if (chartVisible) renderChart();
+  });
+  header.append(graphToggleBtn);
+
+  root.append(header, warningBanner, filterSection, graphSection, tableSection);
 
   // ── Helper: render the filter checkbox list ─────────────
   function renderFilterList() {
@@ -272,6 +320,152 @@ export async function render({ route, me, api }) {
     document.title = originalTitle;
   }
 
+  // ── Graph trunk picker ──────────────────────────────────
+  function renderGraphPicker() {
+    graphPickerList.innerHTML = "";
+
+    // "All" checkbox
+    const allLabel = document.createElement("label");
+    allLabel.className = "trunk-graph-picker-item";
+    const allCb = document.createElement("input");
+    allCb.type = "checkbox";
+    allCb.checked = chartTrunkIds.size === 0;  // "All" when no specific trunks chosen
+    allCb.addEventListener("change", () => {
+      chartTrunkIds.clear();
+      renderGraphPicker();
+      if (chartVisible) renderChart();
+    });
+    const allSpan = document.createElement("span");
+    allSpan.textContent = "All (combined)";
+    allLabel.append(allCb, allSpan);
+    graphPickerList.append(allLabel);
+
+    // Per-trunk checkboxes (only those currently selected in the filter)
+    for (const id of selectedIds) {
+      const trunk = allTrunks.find((t) => t.id === id);
+      if (!trunk) continue;
+      const label = document.createElement("label");
+      label.className = "trunk-graph-picker-item";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = chartTrunkIds.has(id);
+      cb.addEventListener("change", () => {
+        if (cb.checked) chartTrunkIds.add(id);
+        else chartTrunkIds.delete(id);
+        // If nothing specific is selected, revert to "All"
+        renderGraphPicker();
+        if (chartVisible) renderChart();
+      });
+      const span = document.createElement("span");
+      span.textContent = trunk._cleanName;
+      label.append(cb, span);
+      graphPickerList.append(label);
+    }
+  }
+
+  // ── Chart rendering ─────────────────────────────────────
+  function pushChartData() {
+    const ts = new Date();
+    const perTrunk = {};
+    let total = 0;
+    for (const id of selectedIds) {
+      const m = metricsMap.get(id);
+      const ib = m?.calls?.inboundCallCount || 0;
+      const ob = m?.calls?.outboundCallCount || 0;
+      const sum = ib + ob;
+      perTrunk[id] = sum;
+      total += sum;
+    }
+    chartHistory.push({ ts, perTrunk, total });
+    if (chartHistory.length > CHART_HISTORY_MAX) {
+      chartHistory = chartHistory.slice(-CHART_HISTORY_MAX);
+    }
+  }
+
+  function renderChart() {
+    if (!chartVisible || !chartHistory.length) return;
+    const Chart = window.Chart;
+    if (!Chart) { console.warn("Chart.js not loaded"); return; }
+
+    const labels = chartHistory.map((p) =>
+      p.ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+    );
+
+    let datasets;
+    if (chartTrunkIds.size === 0) {
+      // "All" mode — single combined line
+      datasets = [{
+        label: "Total Concurrent Calls",
+        data: chartHistory.map((p) => p.total),
+        borderColor: CHART_COLOURS[0],
+        backgroundColor: CHART_COLOURS[0] + "33",
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+      }];
+    } else {
+      // Per-trunk lines
+      let ci = 0;
+      datasets = [...chartTrunkIds].map((id) => {
+        const trunk = allTrunks.find((t) => t.id === id);
+        const colour = CHART_COLOURS[ci++ % CHART_COLOURS.length];
+        return {
+          label: trunk?._cleanName || id,
+          data: chartHistory.map((p) => p.perTrunk[id] ?? 0),
+          borderColor: colour,
+          backgroundColor: colour + "33",
+          fill: false,
+          tension: 0.3,
+          pointRadius: 2,
+        };
+      });
+    }
+
+    // Threshold reference line
+    if (CALL_THRESHOLD > 0) {
+      datasets.push({
+        label: `Threshold (${CALL_THRESHOLD})`,
+        data: chartHistory.map(() => CALL_THRESHOLD),
+        borderColor: "#ef4444",
+        borderDash: [6, 4],
+        borderWidth: 1.5,
+        pointRadius: 0,
+        fill: false,
+      });
+    }
+
+    if (chartInstance) {
+      chartInstance.data.labels = labels;
+      chartInstance.data.datasets = datasets;
+      chartInstance.update("none");
+    } else {
+      chartInstance = new Chart(canvas, {
+        type: "line",
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          interaction: { mode: "index", intersect: false },
+          plugins: {
+            legend: { position: "bottom", labels: { color: "#93a4b8", boxWidth: 12 } },
+          },
+          scales: {
+            x: {
+              ticks: { color: "#93a4b8", maxTicksLimit: 12 },
+              grid: { color: "rgba(255,255,255,0.06)" },
+            },
+            y: {
+              beginAtZero: true,
+              ticks: { color: "#93a4b8", precision: 0 },
+              grid: { color: "rgba(255,255,255,0.06)" },
+            },
+          },
+        },
+      });
+    }
+  }
+
   // ── Metrics fetching (REST) ─────────────────────────────
   async function fetchMetrics() {
     // Collect ALL trunk instance IDs (including duplicate edge instances)
@@ -302,11 +496,18 @@ export async function render({ route, me, api }) {
         console.warn("Trunk metrics fetch failed:", e);
       }
     }
+    pushChartData();
     renderTable();
+    if (chartVisible) renderChart();
   }
 
   // ── Selection changed → update subscriptions + fetch ────
   function onSelectionChanged() {
+    renderGraphPicker();
+    // Remove any graph-selected trunks that are no longer in the filter
+    for (const id of chartTrunkIds) {
+      if (!selectedIds.has(id)) chartTrunkIds.delete(id);
+    }
     renderTable();
     fetchMetrics();
     updateSubscriptions();
@@ -349,7 +550,9 @@ export async function render({ route, me, api }) {
       }
     }
 
+    pushChartData();
     renderTable();
+    if (chartVisible) renderChart();
   }
 
   // ── Bootstrap ───────────────────────────────────────────
@@ -378,6 +581,7 @@ export async function render({ route, me, api }) {
     allTrunks.sort((a, b) => a._cleanName.localeCompare(b._cleanName));
 
     renderFilterList();
+    renderGraphPicker();
     renderTable();
 
     // 2. Start notification service (WebSocket for instant updates)
@@ -417,6 +621,7 @@ export async function render({ route, me, api }) {
     if (!root.isConnected) {
       if (pollTimer) clearInterval(pollTimer);
       stopTabFlash();
+      if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
       notifService?.destroy();
       observer.disconnect();
     }
