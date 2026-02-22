@@ -100,7 +100,6 @@ export async function render({ route, me, api }) {
         <th>Inbound</th>
         <th>Outbound</th>
         <th>Total Calls</th>
-        <th>Updated</th>
       </tr>
     </thead>
     <tbody id="trunkTableBody"></tbody>
@@ -160,7 +159,7 @@ export async function render({ route, me, api }) {
       .sort((a, b) => a.trunk._cleanName.localeCompare(b.trunk._cleanName));
 
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="trunk-empty">Select one or more trunks above</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="trunk-empty">Select one or more trunks above</td></tr>`;
       return;
     }
 
@@ -172,9 +171,6 @@ export async function render({ route, me, api }) {
         const total = (typeof inbound === "number" && typeof outbound === "number")
           ? inbound + outbound
           : "—";
-        const updated = m
-          ? new Date(m.eventTime || Date.now()).toLocaleTimeString()
-          : "—";
 
         return `<tr>
           <td>${escapeHtml(trunk._cleanName)}</td>
@@ -182,10 +178,25 @@ export async function render({ route, me, api }) {
           <td>${escapeHtml(String(inbound))}</td>
           <td>${escapeHtml(String(outbound))}</td>
           <td>${escapeHtml(String(total))}</td>
-          <td>${escapeHtml(updated)}</td>
         </tr>`;
       })
       .join("");
+
+    // ── Total footer row ──────────────────────────────────
+    let sumIn = 0, sumOut = 0, hasAny = false;
+    for (const { m } of rows) {
+      const ib = m?.calls?.inboundCallCount;
+      const ob = m?.calls?.outboundCallCount;
+      if (typeof ib === "number") { sumIn += ib; hasAny = true; }
+      if (typeof ob === "number") { sumOut += ob; hasAny = true; }
+    }
+    tbody.innerHTML += `<tr class="trunk-total-row">
+      <td><strong>Total</strong></td>
+      <td></td>
+      <td><strong>${hasAny ? sumIn : "—"}</strong></td>
+      <td><strong>${hasAny ? sumOut : "—"}</strong></td>
+      <td><strong>${hasAny ? sumIn + sumOut : "—"}</strong></td>
+    </tr>`;
   }
 
   function resolveStatus(trunk, _metrics) {

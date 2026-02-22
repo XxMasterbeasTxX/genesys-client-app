@@ -283,3 +283,8 @@ body {
 .trunk-dot--green { background: #22c55e; }
 .trunk-dot--red   { background: #ef4444; }
 .trunk-dot--gray  { background: #6b7280; }
+
+.trunk-total-row {
+  border-top: 2px solid var(--border);
+  background: var(--surface-alt, rgba(255,255,255,0.04));
+}
