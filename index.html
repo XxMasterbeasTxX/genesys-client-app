@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Genesys Cloud App</title>
-  <link rel="stylesheet" href="/css/styles.css" />
+  <title>Genesys App Shell</title>
+  <link rel="stylesheet" href="css/styles.css" />
 </head>
 <body>
   <div class="app-shell">
@@ -12,34 +12,26 @@
       <div class="brand">
         <div class="brand-mark">GC</div>
         <div class="brand-text">
-          <div class="brand-title">My Private App</div>
+          <div class="brand-title" id="brandTitle">My Private App</div>
           <div class="brand-subtitle" id="envSubtitle">—</div>
         </div>
       </div>
 
       <div class="header-right">
-        <div class="pill" id="authPill">Auth: unknown</div>
+        <div class="pill" id="authPill">Auth: starting…</div>
       </div>
     </header>
 
     <div class="app-body">
       <nav class="app-nav" aria-label="Main">
-        <a class="nav-item" href="#/dashboards" data-route="/dashboards">
-          Dashboards
-        </a>
-
-        <!-- Add more later:
-        <a class="nav-item" href="#/datatable-editor" data-route="/datatable-editor">Data Table Editor</a>
-        <a class="nav-item" href="#/audit" data-route="/audit">Audit</a>
-        -->
+        <a class="nav-item" href="#/dashboards" data-route="/dashboards">Dashboards</a>
+        <!-- Add more later -->
       </nav>
 
-      <main class="app-main" id="appMain" tabindex="-1">
-        <!-- Router renders here -->
-      </main>
+      <main class="app-main" id="appMain" tabindex="-1"></main>
     </div>
   </div>
 
-  <script type="module" src="/js/app.js"></script>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>

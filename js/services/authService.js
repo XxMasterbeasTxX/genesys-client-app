@@ -23,7 +23,7 @@ function setToken(token) {
   sessionStorage.setItem(K_EXPIRES_AT, String(expiresAt));
 }
 
-function getValidAccessToken() {
+export function getValidAccessToken() {
   const accessToken = sessionStorage.getItem(K_ACCESS_TOKEN);
   const expiresAtStr = sessionStorage.getItem(K_EXPIRES_AT);
   if (!accessToken || !expiresAtStr) return null;
@@ -186,4 +186,56 @@ export async function ensureAuthenticatedWithMe() {
   // C) No token and no code => login
   await startLoginRedirect();
   return { status: "redirecting" };
+}
+
+/**
+ * Force a new login (e.g. after token revocation or manual sign-out).
+ */
+export async function refreshSession() {
+  clearAuthSession();
+  await startLoginRedirect();
+}
+
+// --- PROACTIVE SESSION REFRESH ---
+// Warning fires 2 minutes before expiry; auto-redirect fires 1 minute before.
+const WARNING_BEFORE_MS = 2 * 60 * 1000;
+
+/**
+ * Schedule proactive session monitoring.
+ *
+ * @param {Object}   callbacks
+ * @param {Function} callbacks.onExpiringSoon  Called with seconds remaining when session is about to expire.
+ * @param {Function} callbacks.onSessionExpired Called when the token is no longer usable (triggers re-login).
+ * @returns {Function} cleanup — call to clear all timers.
+ */
+export function scheduleTokenRefresh({ onExpiringSoon, onSessionExpired } = {}) {
+  const expiresAtStr = sessionStorage.getItem(K_EXPIRES_AT);
+  if (!expiresAtStr) return () => {};
+
+  const expiresAt = Number(expiresAtStr);
+  if (!Number.isFinite(expiresAt)) return () => {};
+
+  const timers = [];
+  const now = Date.now();
+
+  // Warning callback
+  const warningIn = expiresAt - WARNING_BEFORE_MS - now;
+  if (warningIn > 0 && onExpiringSoon) {
+    timers.push(setTimeout(() => {
+      const secsLeft = Math.round((expiresAt - Date.now()) / 1000);
+      onExpiringSoon(secsLeft);
+    }, warningIn));
+  }
+
+  // Auto-redirect when token becomes unusable (EXPIRY_SKEW_MS before actual expiry)
+  const expireIn = expiresAt - EXPIRY_SKEW_MS - now;
+  if (expireIn > 0) {
+    timers.push(setTimeout(async () => {
+      if (onSessionExpired) onSessionExpired();
+      clearAuthSession();
+      await startLoginRedirect();
+    }, expireIn));
+  }
+
+  return () => timers.forEach(clearTimeout);
 }

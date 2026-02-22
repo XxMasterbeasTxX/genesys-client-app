@@ -2,15 +2,18 @@ import { CONFIG } from "./config.js";
 import { Router } from "./router.js";
 import { renderDashboardsPage } from "./pages/dashboards.js";
 import { renderNotFoundPage } from "./pages/notfound.js";
-import { createAuthService } from "./services/authService.js";
+import { escapeHtml } from "./utils.js";
+import {
+  ensureAuthenticatedWithMe,
+  getValidAccessToken,
+  scheduleTokenRefresh,
+} from "./services/authService.js";
 import { createApiClient } from "./services/apiClient.js";
 
 function setHeader({ authText }) {
   document.getElementById("brandTitle").textContent = CONFIG.appName;
   document.getElementById("envSubtitle").textContent = `${CONFIG.region}`;
-
-  const pill = document.getElementById("authPill");
-  pill.textContent = authText;
+  document.getElementById("authPill").textContent = authText;
 }
 
 function setActiveNav(route) {
@@ -26,62 +29,59 @@ function ensureDefaultRoute() {
   }
 }
 
-async function main() {
+function renderFatalError(message) {
+  const outletEl = document.getElementById("appMain");
+  outletEl.innerHTML = `
+    <section class="card">
+      <h1 class="h1">Startup error</h1>
+      <p class="p">${escapeHtml(message)}</p>
+    </section>
+  `;
+}
+
+(async function main() {
   ensureDefaultRoute();
   setHeader({ authText: "Auth: starting…" });
 
-  const auth = createAuthService();
+  // --- Authenticate ---
+  setHeader({ authText: "Auth: checking token / login…" });
+  const res = await ensureAuthenticatedWithMe();
 
-  // 1) Ensure token (or redirect)
-  const authResult = await auth.ensureAuthenticated();
-  if (authResult.status === "redirecting") return;
-
-  setHeader({ authText: `Auth: ${authResult.from} • checking API…` });
-
-  // 2) Optional: get /users/me once (safe to show name/id)
-  const api = createApiClient(auth.getAccessToken);
-  let me = null;
-  try {
-    me = await api.getUsersMe();
-    setHeader({ authText: `Auth: ok • ${me?.name || "user"}` });
-  } catch {
-    setHeader({ authText: "Auth: ok • API check failed" });
+  if (res.status === "redirecting") {
+    setHeader({ authText: "Auth: redirecting…" });
+    return;
   }
 
-  // 3) Start router
-  const outletEl = document.getElementById("appMain");
+  // Auth OK
+  const userName = res.me?.name || "user";
+  setHeader({ authText: `Auth: ok · ${userName}` });
 
+  // --- Create a shared API client for all pages ---
+  const api = createApiClient(getValidAccessToken);
+
+  // --- Proactive session monitoring ---
+  scheduleTokenRefresh({
+    onExpiringSoon: (secsLeft) => {
+      setHeader({ authText: `Auth: ok · ${userName} · session expires in ${secsLeft}s` });
+    },
+    onSessionExpired: () => {
+      setHeader({ authText: "Auth: session expired — redirecting…" });
+    },
+  });
+
+  // --- Start router ---
+  const outletEl = document.getElementById("appMain");
   const router = new Router({
     outletEl,
     routes: {
-      "/dashboards": async () => renderDashboardsPage({ me }),
+      "/dashboards": async () => renderDashboardsPage({ me: res.me, api }),
       "/404": async (ctx) => renderNotFoundPage(ctx),
     },
     onRouteChanged: (route) => setActiveNav(route),
   });
 
   router.start();
-}
-
-main().catch((err) => {
-  const outletEl = document.getElementById("appMain");
-  if (outletEl) {
-    outletEl.innerHTML = `
-      <section class="card">
-        <h1 class="h1">Startup error</h1>
-        <p class="p">${escapeHtml(err?.message || String(err))}</p>
-      </section>
-    `;
-  }
-  const pill = document.getElementById("authPill");
-  if (pill) pill.textContent = "Auth: failed";
+})().catch((err) => {
+  setHeader({ authText: "Auth: failed" });
+  renderFatalError(err?.message || String(err));
 });
-
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}

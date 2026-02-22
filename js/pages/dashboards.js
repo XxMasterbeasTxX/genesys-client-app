@@ -1,3 +1,5 @@
+import { escapeHtml } from "../utils.js";
+
 export async function renderDashboardsPage({ me }) {
   const root = document.createElement("div");
 
@@ -18,22 +20,27 @@ export async function renderDashboardsPage({ me }) {
   if (me) {
     const kv = document.createElement("div");
     kv.className = "kv";
-    kv.innerHTML = `
-      <div class="k">Signed in as</div><div class="v">${escapeHtml(me.name || "")}</div>
-      <div class="k">User ID</div><div class="v">${escapeHtml(me.id || "")}</div>
-    `;
+
+    const kName = document.createElement("div");
+    kName.className = "k";
+    kName.textContent = "Signed in as";
+
+    const vName = document.createElement("div");
+    vName.className = "v";
+    vName.textContent = me.name || "";
+
+    const kId = document.createElement("div");
+    kId.className = "k";
+    kId.textContent = "User ID";
+
+    const vId = document.createElement("div");
+    vId.className = "v";
+    vId.textContent = me.id || "";
+
+    kv.append(kName, vName, kId, vId);
     card.append(kv);
   }
 
   root.append(card);
   return root;
-}
-
-function escapeHtml(s) {
-  return String(s)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }

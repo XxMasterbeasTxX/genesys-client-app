@@ -10,8 +10,9 @@ export const CONFIG = {
   // Keep simple for hash routing; must match exactly in Genesys app config
   oauthRedirectUri: "https://proud-pebble-04fa37b03.2.azurestaticapps.net",
 
-  // Add scopes as needed (start minimal)
-  oauthScopes: ["openid"],
+  // OIDC scopes — enriches the id_token. API permissions are controlled
+  // by the OAuth client roles and the user's own roles in Genesys Cloud admin.
+  oauthScopes: ["openid", "profile", "email"],
 
   router: { mode: "hash" }
 };
