@@ -16,6 +16,7 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 | **Fullscreen** | Hybrid mode — native Fullscreen API when available, CSS-maximised overlay fallback for sandboxed iframes |
 | **Open in New Tab** | Popout button with localStorage-based session handoff so the new tab skips re-authentication |
 | **Trunk History** | Historical peak concurrent-call chart powered by an Azure Functions backend that collects metrics every minute (configurable). Preset and custom date-range picker, peak/avg stats cards, server-side aggregation (hourly/daily buckets with peak + avg lines) |
+| **Alert System** | Configurable call-count threshold with cooldown. When breached, executes Genesys Cloud Data Actions to send SMS notifications (Email placeholder ready). Per-channel fields (phone number, sender, message) configured from the in-app alert panel. Channel definitions driven by a shared backend config (`channelConfig.js`) — adding a new channel requires only a config entry. |
 
 ## Tech Stack
 
@@ -58,22 +59,29 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 │           └── trunks/
 │               ├── activity.js       # Live trunk activity dashboard
 │               ├── history.js        # Historical peak-call chart page
+│               ├── alertConfig.js    # Frontend alert defaults (threshold, cooldown)
 │               ├── historyConfig.js  # Feature-level tunables for history
 │               └── trunkConfig.js    # Feature-level tunables for activity
 ├── api/                                # Azure Functions backend
 │   ├── host.json                       # Function App runtime config
 │   ├── package.json                    # Node.js dependencies
 │   ├── shared/
+│   │   ├── alertStore.js               # Alert config + state Table Storage helpers
+│   │   ├── channelConfig.js            # Channel definitions (SMS, Email) — single source of truth
 │   │   ├── gcConfig.js                 # Shared region / API base config
 │   │   ├── genesysAuth.js              # Client Credentials OAuth helper
 │   │   └── tableClient.js             # Azure Table Storage read/write
-│   ├── collectTrunkMetrics/            # Timer trigger — every 1 min (configurable)
+│   ├── alertConfig/                    # HTTP trigger — GET/PUT /api/alertConfig
 │   │   ├── function.json
 │   │   └── index.js
+│   ├── collectTrunkMetrics/            # Timer trigger — every 1 min (configurable)
+│   │   ├── function.json
+│   │   └── index.js                    #   + threshold breach detection + Data Action execution
 │   └── getTrunkHistory/                # HTTP trigger — GET /api/getTrunkHistory
 │       ├── function.json
 │       └── index.js
 ├── docs/
+│   ├── alert-system-roadmap.md          # Alert system status & pending items
 │   ├── deployment-guide.md             # Full customer deployment guide
 │   └── trunk-history-peak-tracking.md
 └── .github/
@@ -119,7 +127,9 @@ Configuration follows a **layered** approach designed to scale as the app grows:
 | `js/config.js` | Global | Region, OAuth client, redirect URI, scopes, router mode |
 | `js/navConfig.js` | Global | Sidebar navigation tree and enabled flags |
 | `js/pages/dashboards/trunks/trunkConfig.js` | Feature | Call threshold, poll interval, chart history length, colour palette |
+| `js/pages/dashboards/trunks/alertConfig.js` | Feature | Default threshold (0 = disabled), default cooldown (15 min) |
 | `js/pages/dashboards/trunks/historyConfig.js` | Feature | Default date range, chart max points, colours |
+| `api/shared/channelConfig.js` | Backend | Notification channel definitions (SMS action ID, fields, defaults) |
 
 Feature-level config files live alongside their feature code so new modules can follow the same pattern without bloating the global config.
 

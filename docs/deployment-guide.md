@@ -106,8 +106,7 @@ This client is used by Azure Functions for server-to-server API calls (no user c
 | Grant Type | **Client Credentials** |
 
 1. Under **Roles**, assign:
-   - **Telephony Admin** (or a custom role with `telephony:plugin:all` permission) — needed to read trunk metrics
-
+   - **Telephony Admin** (or a custom role with `telephony:plugin:all` permission) — needed to read trunk metrics   - **Integration** permissions — `integrations:action:execute` — needed for SMS/Email Data Action execution
 2. Click **Save**
 3. **Copy both the Client ID and Client Secret** — you'll need them for Azure Function App environment variables
 
@@ -355,16 +354,16 @@ These files contain customer-tunable settings. Adjust as needed:
 | `CHART_HISTORY_MAX` | `120` | Rolling chart data points |
 | `CHART_COLOURS` | Blue, green, … | 10-colour palette for chart lines |
 
-**`js/pages/dashboards/trunks/alertConfig.js`** — Alert channel definitions:
+**`js/pages/dashboards/trunks/alertConfig.js`** — Alert defaults:
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `ALERT_CHANNELS` | Email, SMS | Available notification channels (keys must match backend Data Actions) |
 | `DEFAULT_THRESHOLD` | `0` | Default threshold value when no config is saved (0 = disabled) |
 | `DEFAULT_COOLDOWN_MINUTES` | `15` | Default cooldown between backend alerts |
 
-> **Note:** The alert threshold is now configurable from the in-app **🔔 Alerts** panel on the Activity page, and is stored in Azure Table Storage (`AlertConfig` table). It is no longer a hardcoded value.
-| `CHART_COLOURS` | Blue, green, … | 10-colour palette for chart lines |
+> **Note:** The alert threshold, cooldown, and per-channel fields (phone number, sender, message) are all configurable from the in-app **🔔 Alerts** panel on the Activity page, and stored in Azure Table Storage (`AlertConfig` table).
+>
+> Channel definitions (which channels exist, their Data Action IDs, and which fields to show) are driven by `api/shared/channelConfig.js` on the backend. The frontend loads them dynamically — no frontend changes needed to add a new channel.
 
 **`js/pages/dashboards/trunks/historyConfig.js`** — Trunk history:
 
@@ -405,6 +404,39 @@ Enable or disable dashboard sections by setting `enabled: true/false` on any nod
 ### 7.5 Backend Region — `api/shared/gcConfig.js`
 
 The backend reads `GC_REGION` from environment variables (set in Step 6.3). The fallback default is `mypurecloud.de`. No code change needed if the environment variable is set correctly.
+
+### 7.6 Notification Channels — `api/shared/channelConfig.js`
+
+This file is the **single source of truth** for all notification channels (SMS, Email, etc.). The frontend loads channel definitions from the backend — no frontend changes are needed when adding or modifying channels.
+
+**SMS channel** is pre-configured with:
+
+| Property | Value |
+| --- | --- |
+| `actionId` | The Genesys Cloud Data Action ID for the SMS integration |
+| `defaults.encoding` | `gsm7` (hidden, not shown to users) |
+| `fields` | Phone Number (tel), Sender Name (text), Message (textarea) |
+
+**To configure for a new customer:**
+
+1. Create (or identify) the SMS Data Action in Genesys Cloud (**Admin → Integrations → Actions**)
+2. Ensure the Data Action is **published** (not just a draft)
+3. Update the `actionId` in `channelConfig.js` to match the customer's Data Action ID
+4. Ensure the backend OAuth client (Step 3.2) has `integrations:action:execute` permission
+
+**SMS sender field constraints** (enforced by the downstream SMS provider):
+
+- Alphanumeric: max **11 characters**, letters and digits only (`[A-Za-z0-9]`), **no spaces**
+- Numeric: max **15 digits**
+
+**Message template placeholders:**
+
+| Placeholder | Replaced with |
+| --- | --- |
+| `{{totalCalls}}` | Current total concurrent calls at breach time |
+| `{{threshold}}` | Configured threshold value |
+
+**Email channel** is a placeholder entry (`actionId: null`). To enable it, add the Data Action ID and define the `fields` array in the same format as SMS.
 
 ---
 
@@ -486,9 +518,10 @@ Run through these checks after deployment:
 
 ### Backend
 
-- [ ] In Azure Portal, go to Function App → **Functions** — verify both `collectTrunkMetrics` and `getTrunkHistory` are listed
+- [ ] In Azure Portal, go to Function App → **Functions** — verify `alertConfig`, `collectTrunkMetrics`, and `getTrunkHistory` are listed
 - [ ] Check **Function App → Monitor → Logs** — look for `"Found X external trunk(s)"` messages from the timer
 - [ ] Wait a few minutes, then reload the History page — data points should appear
+- [ ] Open the Activity page → click 🔔 **Alerts** → set threshold to 1, enable SMS, fill in phone/sender/message → Save → verify an SMS is received when a call is active
 - [ ] Test the HTTP endpoint directly:
 
   ```text

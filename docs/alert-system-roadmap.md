@@ -1,80 +1,56 @@
-# Alert System — Pending Items
+# Alert System — Status & Pending Items
 
-> Reference for future implementation. The foundation (Step 1) is complete and deployed.
-
----
-
-## What's Done (Step 1)
-
-- **Backend:** `alertConfig` HTTP function (GET/PUT) storing threshold, cooldown, and channel toggles in Azure Table Storage
-- **Backend:** `collectTrunkMetrics` detects threshold breaches every 1 minute, respects cooldown, tracks breach state in `AlertState` table
-- **Frontend:** 🔔 Alerts slide-out panel on Activity page — configure threshold, cooldown, Email/SMS channel toggles
-- **Frontend:** Dynamic threshold for warning banner + chart reference line (loaded from backend, no longer hardcoded)
+> Step 1 (foundation) and Step 2 (SMS execution) are complete and deployed.
 
 ---
 
-## What's Missing (Step 2+)
+## What's Done
 
-### 1. Data Action Creation in Genesys Cloud
+### Step 1 — Foundation
 
-Before the backend can send alerts, two Genesys Cloud Data Actions must be created:
+- **Backend:** `alertConfig` HTTP function (GET/PUT) storing threshold, cooldown, and channel config in Azure Table Storage (`AlertConfig` / `AlertState` tables)
+- **Backend:** `collectTrunkMetrics` detects threshold breaches every 1 minute, respects cooldown, tracks breach state
+- **Frontend:** 🔔 Alerts slide-out panel on Activity page — configure threshold, cooldown, channel toggles
+- **Frontend:** Dynamic threshold for warning banner + chart reference line (loaded from backend)
 
-- **Email Data Action** — calls the Agentless Email API (`POST /api/v2/conversations/emails/agentless`)
-- **SMS Data Action** — calls the Agentless SMS API (`POST /api/v2/conversations/messages/agentless`)
+### Step 2 — SMS Data Action Execution
 
-Each Data Action needs an input schema defining the required fields (e.g. `toAddress`, `subject`, `body` for email; `toAddress`, `messageBody` for SMS).
+- **Backend:** `api/shared/channelConfig.js` — single source of truth for notification channel definitions (action ID, required fields, hidden defaults). Reusable by any Azure Function.
+- **Backend:** `alertConfig` GET response now includes `channelDefs` so the frontend renders dynamic per-channel fields without hardcoding
+- **Backend:** `alertConfig` PUT persists per-channel field values (recipient, sender, text for SMS)
+- **Backend:** `collectTrunkMetrics` → `executeChannelAction()` merges user-saved fields with channel defaults, resolves `{{totalCalls}}` / `{{threshold}}` placeholders, POSTs to `POST /api/v2/integrations/actions/{actionId}/execute`
+- **Backend:** Optional/empty fields are stripped from the payload — only required fields are sent to avoid downstream provider rejections
+- **Frontend:** Alert panel dynamically renders per-channel input fields (Phone Number, Sender Name, Message) from backend definitions; fields show/hide with the channel toggle
+- **SMS Data Action ID:** `custom_-_3af155c2-20c5-4c44-babf-f0a9eb041a47`
 
-### 2. Per-Channel Configuration Fields
+---
 
-Once the Data Action input schemas are known, add per-channel fields to the alert panel:
+## What's Missing (Step 3+)
 
-| Channel | Fields Needed                      |
-|---------|------------------------------------|
-| Email   | To address, Subject, Body template |
-| SMS     | Phone number, Message template     |
+### 1. Email Channel
 
-These should be stored in the `channels` object in the `AlertConfig` table, e.g.:
+The Email channel is defined as a placeholder in `channelConfig.js` with `actionId: null`. To wire it up:
 
-```json
-{
-  "email": { "enabled": true, "to": "...", "subject": "...", "body": "..." },
-  "sms":   { "enabled": true, "phone": "...", "message": "..." }
-}
-```
+1. Create an Email Data Action in Genesys Cloud (e.g. using the Agentless Email API)
+2. Add the `actionId` and `fields` array to the email entry in `channelConfig.js`
+3. Deploy — the frontend and backend will pick it up automatically
 
-**Frontend changes:** Add input fields per channel in the alert panel (conditionally shown when channel is enabled).  
-**Backend changes:** `alertConfig/index.js` PUT validation needs to accept and validate the new fields.
+### 2. Frontend Validation for SMS Fields
 
-### 3. Data Action Execution from Backend
+Currently the alert panel does not validate field values before saving. Consider adding:
 
-In `collectTrunkMetrics/index.js`, the `checkThresholdBreach()` function currently logs the breach but does **not** call any Data Action. The placeholder is:
+- Sender name: max 11 alphanumeric characters, no spaces (provider requirement)
+- Phone number: international format validation (`+` prefix, digits only)
+- Message: non-empty check
 
-```text
-// (Data Action execution reserved for future implementation.)
-```
-
-Implementation options:
-
-- **Option A — Direct API call:** The Azure Function authenticates to Genesys Cloud (already does via Client Credentials) and calls the Data Action execute endpoint: `POST /api/v2/integrations/actions/{actionId}/execute`
-- **Option B — Direct Agentless API:** Skip Data Actions entirely and call the Agentless Email/SMS endpoints directly from the Azure Function
-
-Either way, the Function App's OAuth client needs the appropriate Genesys Cloud permissions.
-
-### 4. Data Action IDs in Configuration
-
-If using Option A, the Data Action IDs need to be stored somewhere:
-
-- **App Setting (env var):** e.g. `GC_EMAIL_ACTION_ID`, `GC_SMS_ACTION_ID` — simplest
-- **In AlertConfig table:** Add `actionId` per channel — more flexible but requires UI changes
-
-### 5. Alert History / Audit Log (Optional)
+### 3. Alert History / Audit Log (Optional)
 
 Currently breach events are only logged to Azure Function logs. Consider:
 
-- A new `AlertHistory` table storing each alert sent (timestamp, channel, threshold, call count)
+- A new `AlertHistory` table storing each alert sent (timestamp, channel, threshold, call count, success/failure)
 - A frontend view to see past alerts
 
-### 6. Multiple Threshold Levels (Optional)
+### 4. Multiple Threshold Levels (Optional)
 
 Current design: single threshold value. Future option: warning vs. critical levels with different actions per level.
 
@@ -82,19 +58,23 @@ Current design: single threshold value. Future option: warning vs. critical leve
 
 ## Required Genesys Cloud Permissions
 
-The OAuth Client Credentials grant used by the Function App will need these additional permissions when Data Actions are implemented:
+The OAuth Client Credentials grant used by the Function App needs:
 
-| Permission | Purpose |
-| ---------- | ------- |
-| `integrations:action:execute` | Execute Data Actions |
-| `conversation:email:create` | Agentless email (if calling API directly) |
-| `conversation:message:create` | Agentless SMS (if calling API directly) |
+| Permission | Purpose | Status |
+| ---------- | ------- | ------ |
+| `telephony:plugin:all` | Read trunk metrics | ✅ In use |
+| `integrations:action:execute` | Execute Data Actions (SMS/Email) | ✅ In use |
 
 ---
 
-## Decision Points Before Starting Step 2
+## Architecture
 
-1. **Which Data Action approach?** Option A (execute via Data Action) vs Option B (direct Agentless API)
-2. **What are the exact input schemas?** Defines the per-channel fields
-3. **Where to store Data Action IDs?** Env vars vs table config
-4. **Is alert history needed?** Adds complexity but provides auditability
+```text
+channelConfig.js (single source of truth)
+        │
+        ├── alertConfig GET  → serves definitions to frontend
+        ├── alertConfig PUT  → validates + stores per-channel field values
+        └── collectTrunkMetrics → builds payload + executes Data Action
+```
+
+Adding a new channel: add an entry to `channelConfig.js` with `key`, `label`, `actionId`, `defaults`, and `fields`. Everything else adapts automatically.
