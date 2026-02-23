@@ -15,7 +15,7 @@ export const CONFIG = {
   oauthScopes: ["openid", "profile", "email"],
 
   // Azure Functions backend (trunk history, etc.)
-  functionsBase: "https://genesys-app-functions.azurewebsites.net",
+  functionsBase: "https://genesys-app-functions-ebfcc6ffbshwazbh.swedencentral-01.azurewebsites.net",
 
   router: { mode: "hash" }
 };
