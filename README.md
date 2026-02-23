@@ -15,6 +15,7 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 | **Real-time Chart** | Chart.js 4 line graph with trunk picker ("All" combined or individual trunks), rolling history, and threshold reference line |
 | **Fullscreen** | Hybrid mode — native Fullscreen API when available, CSS-maximised overlay fallback for sandboxed iframes |
 | **Open in New Tab** | Popout button with localStorage-based session handoff so the new tab skips re-authentication |
+| **Trunk History** | Historical peak concurrent-call chart powered by an Azure Functions backend that collects metrics every 5 minutes. Preset and custom date-range picker, peak/avg stats cards, auto-downsampled Chart.js graph |
 
 ## Tech Stack
 
@@ -23,7 +24,9 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 - **Charts** — [Chart.js 4](https://www.chartjs.org/) via CDN
 - **Auth** — OAuth 2.0 PKCE (OIDC scopes `openid profile email`)
 - **Real-time** — Genesys Cloud WebSocket notifications with REST subscription management
-- **Hosting** — Azure Static Web Apps (CI/CD via GitHub Actions)
+- **Backend** — Azure Functions (Node.js 20, Consumption plan) for scheduled metric collection and history API
+- **Storage** — Azure Table Storage for time-series trunk metrics
+- **Hosting** — Azure Static Web Apps + Azure Functions (CI/CD via GitHub Actions)
 - **Region** — `mypurecloud.de` (configurable in `js/config.js`)
 
 ## Project Structure
@@ -54,12 +57,27 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 │           │   └── performance.js
 │           └── trunks/
 │               ├── activity.js       # Live trunk activity dashboard
-│               └── trunkConfig.js    # Feature-level tunables for trunks
+│               ├── history.js        # Historical peak-call chart page
+│               ├── historyConfig.js  # Feature-level tunables for history
+│               └── trunkConfig.js    # Feature-level tunables for activity
+├── api/                                # Azure Functions backend
+│   ├── host.json                       # Function App runtime config
+│   ├── package.json                    # Node.js dependencies
+│   ├── shared/
+│   │   ├── genesysAuth.js              # Client Credentials OAuth helper
+│   │   └── tableClient.js             # Azure Table Storage read/write
+│   ├── collectTrunkMetrics/            # Timer trigger — every 5 min
+│   │   ├── function.json
+│   │   └── index.js
+│   └── getTrunkHistory/                # HTTP trigger — GET /api/getTrunkHistory
+│       ├── function.json
+│       └── index.js
 ├── docs/
 │   └── trunk-history-peak-tracking.md
 └── .github/
     └── workflows/
-        └── azure-static-web-apps-proud-pebble-04fa37b03.yml
+        ├── azure-static-web-apps-proud-pebble-04fa37b03.yml
+        └── deploy-functions.yml        # CI/CD for Azure Functions
 ```
 
 ## Getting Started
@@ -87,7 +105,8 @@ Then open `http://localhost:8080` in a browser.
 
 ### Deployment
 
-Every push to `main` triggers the **Azure Static Web Apps** GitHub Actions workflow, which deploys the app automatically. No build step is needed (`skip_app_build: true`).
+- **SPA:** Every push to `main` triggers the **Azure Static Web Apps** GitHub Actions workflow, which deploys the front-end automatically (`skip_app_build: true`).
+- **Functions:** Pushes that change files under `api/` trigger the **deploy-functions** workflow, which installs dependencies and deploys to the `genesys-app-functions` Function App.
 
 ## Configuration
 
@@ -98,8 +117,18 @@ Configuration follows a **layered** approach designed to scale as the app grows:
 | `js/config.js` | Global | Region, OAuth client, redirect URI, scopes, router mode |
 | `js/navConfig.js` | Global | Sidebar navigation tree and enabled flags |
 | `js/pages/dashboards/trunks/trunkConfig.js` | Feature | Call threshold, poll interval, chart history length, colour palette |
+| `js/pages/dashboards/trunks/historyConfig.js` | Feature | Default date range, chart max points, colours |
 
 Feature-level config files live alongside their feature code so new modules can follow the same pattern without bloating the global config.
+
+The Azure Functions backend reads its configuration from **App Settings** (environment variables) on the Function App:
+
+| Setting | Purpose |
+| --------- | ---------- |
+| `GC_CLIENT_ID` | Genesys Cloud Client Credentials OAuth client ID |
+| `GC_CLIENT_SECRET` | Genesys Cloud Client Credentials OAuth client secret |
+| `GC_REGION` | Genesys Cloud region (e.g. `mypurecloud.de`) |
+| `TABLE_STORAGE_CONNECTION` | Azure Storage connection string (if not using `AzureWebJobsStorage`) |
 
 ## Adding a New Page
 
@@ -111,11 +140,12 @@ The router, navigation tree, and enabled-flag filtering will pick it up automati
 
 ## Environment Variables & Secrets
 
-| Secret                                  | Where                              | Purpose                                    |
-| --------------------------------------- | ---------------------------------- | ------------------------------------------ |
-| `AZURE_STATIC_WEB_APPS_API_TOKEN_*`     | GitHub repo → Settings → Secrets   | Deployment token for Azure Static Web Apps |
+| Secret | Where | Purpose |
+| --------- | --------- | ---------- |
+| `AZURE_STATIC_WEB_APPS_API_TOKEN_*` | GitHub repo → Settings → Secrets | Deployment token for Azure Static Web Apps |
+| `AZURE_FUNCTIONAPP_PUBLISH_PROFILE` | GitHub repo → Settings → Secrets | Publish profile for Azure Functions deployment |
 
-All Genesys Cloud credentials (OAuth client ID, region) are in `js/config.js` and are **public** by design — the PKCE flow does not use a client secret.
+The SPA's OAuth client ID is in `js/config.js` and is **public** by design — the PKCE flow does not use a client secret. The Function App's Client Credentials secret is stored in Azure App Settings, never in code.
 
 ## License
 

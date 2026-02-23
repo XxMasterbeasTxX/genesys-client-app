@@ -1,0 +1,11 @@
+{
+  "name": "genesys-app-functions",
+  "version": "1.0.0",
+  "description": "Azure Functions backend for Genesys Client App",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@azure/data-tables": "^13.2.2"
+  }
+}

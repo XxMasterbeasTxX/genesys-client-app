@@ -62,6 +62,7 @@ export const NAV_TREE = [
         enabled: true,
         children: [
           { label: "Activity", path: "activity", enabled: true },
+          { label: "History", path: "history", enabled: true },
         ],
       },
     ],

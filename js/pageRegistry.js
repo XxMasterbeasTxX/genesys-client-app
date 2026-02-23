@@ -39,6 +39,10 @@ const registry = {
     import("./pages/dashboards/trunks/activity.js").then((m) =>
       m.render(ctx),
     ),
+  "/dashboards/trunks/history": (ctx) =>
+    import("./pages/dashboards/trunks/history.js").then((m) =>
+      m.render(ctx),
+    ),
 };
 
 /**

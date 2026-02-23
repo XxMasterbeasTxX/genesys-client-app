@@ -364,3 +364,97 @@ body {
   flex-direction: column;
   gap: 14px;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Trunk History page
+   ═══════════════════════════════════════════════════════════ */
+.trunk-history {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.trunk-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.trunk-history-header h2 { margin: 0; font-size: 1.25rem; }
+
+/* ── Toolbar: presets + date inputs ────────────────────────── */
+.trunk-history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.trunk-history-preset {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.trunk-history-preset:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+}
+.trunk-history-preset--active {
+  background: #3b82f6;
+  color: #fff;
+  border-color: #3b82f6;
+}
+
+.trunk-history-date {
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+/* ── Status message ──────────────────────────────────────── */
+.trunk-history-status {
+  font-size: 0.85rem;
+  color: var(--muted);
+  min-height: 1.4em;
+}
+
+/* ── Stats cards ─────────────────────────────────────────── */
+.trunk-history-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.trunk-history-stat {
+  flex: 1 1 140px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  text-align: center;
+}
+.trunk-history-stat__value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text);
+}
+.trunk-history-stat__label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+/* ── Chart container ─────────────────────────────────────── */
+.trunk-history-chart-wrap {
+  position: relative;
+  width: 100%;
+  min-height: 320px;
+  max-height: 500px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}

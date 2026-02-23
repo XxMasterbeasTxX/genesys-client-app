@@ -14,5 +14,8 @@ export const CONFIG = {
   // by the OAuth client roles and the user's own roles in Genesys Cloud admin.
   oauthScopes: ["openid", "profile", "email"],
 
+  // Azure Functions backend (trunk history, etc.)
+  functionsBase: "https://genesys-app-functions.azurewebsites.net",
+
   router: { mode: "hash" }
 };
