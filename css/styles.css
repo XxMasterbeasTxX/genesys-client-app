@@ -465,6 +465,27 @@ body {
   accent-color: #3b82f6;
 }
 
+/* Per-channel configurable fields (shown when channel is enabled) */
+.trunk-alert-channel-fields {
+  margin: 0 0 8px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: alertFieldSlide 0.2s ease;
+}
+.trunk-alert-channel-fields.hidden { display: none; }
+
+.trunk-alert-channel-fields textarea.trunk-alert-input {
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+}
+
+@keyframes alertFieldSlide {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .trunk-alert-actions {
   display: flex;
   gap: 8px;

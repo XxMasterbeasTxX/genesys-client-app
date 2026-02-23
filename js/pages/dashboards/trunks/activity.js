@@ -16,7 +16,6 @@ import {
   CHART_LABEL_FORMAT,
 } from "./trunkConfig.js";
 import {
-  ALERT_CHANNELS,
   DEFAULT_THRESHOLD,
   DEFAULT_COOLDOWN_MINUTES,
 } from "./alertConfig.js";
@@ -51,7 +50,8 @@ export async function render({ route, me, api }) {
   // ── Alert config loaded from backend ────────────────────
   let alertThreshold = DEFAULT_THRESHOLD;
   let alertCooldown = DEFAULT_COOLDOWN_MINUTES;
-  let alertChannels = {};          // { email: { enabled }, sms: { enabled } }
+  let alertChannels = {};          // { sms: { enabled, recipient, sender, text }, … }
+  let channelDefs = [];            // channel definitions from backend channelConfig
   let alertPanelOpen = false;
 
   // ── DOM skeleton ────────────────────────────────────────
@@ -274,13 +274,61 @@ export async function render({ route, me, api }) {
     </div>
   `;
 
-  // Populate channel toggles from ALERT_CHANNELS
+  // Populate channel toggles dynamically from backend definitions
   const channelFieldset = alertPanel.querySelector(".trunk-alert-channels");
-  for (const ch of ALERT_CHANNELS) {
-    const lbl = document.createElement("label");
-    lbl.className = "trunk-alert-channel-toggle";
-    lbl.innerHTML = `<input type="checkbox" data-channel="${ch.key}" /> <span>${escapeHtml(ch.label)}</span>`;
-    channelFieldset.append(lbl);
+
+  function renderChannelToggles() {
+    channelFieldset.innerHTML = "<legend>Notification Channels</legend>";
+    for (const ch of channelDefs) {
+      // Channel toggle row
+      const lbl = document.createElement("label");
+      lbl.className = "trunk-alert-channel-toggle";
+      lbl.innerHTML = `<input type="checkbox" data-channel="${ch.key}" /> <span>${escapeHtml(ch.label)}</span>`;
+      channelFieldset.append(lbl);
+
+      // Per-channel fields container (shown/hidden with checkbox)
+      if (ch.fields?.length) {
+        const fieldGroup = document.createElement("div");
+        fieldGroup.className = "trunk-alert-channel-fields";
+        fieldGroup.dataset.channelFields = ch.key;
+
+        for (const f of ch.fields) {
+          const wrap = document.createElement("label");
+          wrap.className = "trunk-alert-field";
+          const labelSpan = document.createElement("span");
+          labelSpan.textContent = f.label;
+          wrap.append(labelSpan);
+
+          let input;
+          if (f.type === "textarea") {
+            input = document.createElement("textarea");
+            input.rows = 3;
+          } else {
+            input = document.createElement("input");
+            input.type = f.type || "text";
+          }
+          input.className = "trunk-alert-input";
+          input.dataset.channelField = `${ch.key}.${f.key}`;
+          if (f.placeholder) input.placeholder = f.placeholder;
+          wrap.append(input);
+
+          if (f.hint) {
+            const hint = document.createElement("small");
+            hint.className = "trunk-alert-hint";
+            hint.textContent = f.hint;
+            wrap.append(hint);
+          }
+          fieldGroup.append(wrap);
+        }
+        channelFieldset.append(fieldGroup);
+
+        // Toggle field visibility when checkbox changes
+        const cb = lbl.querySelector("input[type=checkbox]");
+        cb.addEventListener("change", () => {
+          fieldGroup.classList.toggle("hidden", !cb.checked);
+        });
+      }
+    }
   }
 
   // Panel event listeners
@@ -297,9 +345,20 @@ export async function render({ route, me, api }) {
   function populateAlertPanel() {
     alertPanel.querySelector('[data-field="threshold"]').value = alertThreshold;
     alertPanel.querySelector('[data-field="cooldown"]').value = alertCooldown;
-    for (const ch of ALERT_CHANNELS) {
+    for (const ch of channelDefs) {
       const cb = alertPanel.querySelector(`[data-channel="${ch.key}"]`);
-      if (cb) cb.checked = alertChannels[ch.key]?.enabled ?? false;
+      const enabled = alertChannels[ch.key]?.enabled ?? false;
+      if (cb) cb.checked = enabled;
+
+      // Populate per-channel fields and toggle visibility
+      const fieldGroup = alertPanel.querySelector(`[data-channel-fields="${ch.key}"]`);
+      if (fieldGroup) {
+        fieldGroup.classList.toggle("hidden", !enabled);
+        for (const f of ch.fields) {
+          const input = alertPanel.querySelector(`[data-channel-field="${ch.key}.${f.key}"]`);
+          if (input) input.value = alertChannels[ch.key]?.[f.key] ?? "";
+        }
+      }
     }
     alertPanel.querySelector(".trunk-alert-status").textContent = "";
   }
@@ -312,6 +371,10 @@ export async function render({ route, me, api }) {
       alertThreshold = cfg.threshold ?? DEFAULT_THRESHOLD;
       alertCooldown = cfg.cooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES;
       alertChannels = cfg.channels ?? {};
+      // Channel definitions from backend (single source of truth)
+      if (Array.isArray(cfg.channelDefs)) {
+        channelDefs = cfg.channelDefs;
+      }
     } catch (err) {
       console.warn("Failed to load alert config:", err);
     }
@@ -324,9 +387,15 @@ export async function render({ route, me, api }) {
     const thresholdVal = Number(alertPanel.querySelector('[data-field="threshold"]').value) || 0;
     const cooldownVal = Number(alertPanel.querySelector('[data-field="cooldown"]').value) || 0;
     const channels = {};
-    for (const ch of ALERT_CHANNELS) {
+    for (const ch of channelDefs) {
       const cb = alertPanel.querySelector(`[data-channel="${ch.key}"]`);
-      channels[ch.key] = { enabled: cb?.checked ?? false };
+      const entry = { enabled: cb?.checked ?? false };
+      // Collect per-channel field values
+      for (const f of (ch.fields || [])) {
+        const input = alertPanel.querySelector(`[data-channel-field="${ch.key}.${f.key}"]`);
+        entry[f.key] = input?.value ?? "";
+      }
+      channels[ch.key] = entry;
     }
 
     statusEl.textContent = "Saving…";
@@ -780,6 +849,7 @@ export async function render({ route, me, api }) {
 
     // Load alert config from backend (non-blocking)
     await loadAlertConfig();
+    renderChannelToggles();
     populateAlertPanel();
 
     // 2. Start notification service (WebSocket for instant updates)
