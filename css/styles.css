@@ -413,6 +413,12 @@ body {
   background: var(--panel);
   color: var(--text);
   font-size: 0.85rem;
+  color-scheme: dark;
+}
+
+.trunk-history-date::-webkit-calendar-picker-indicator {
+  filter: invert(0.8);
+  cursor: pointer;
 }
 
 /* ── Status message ──────────────────────────────────────── */
