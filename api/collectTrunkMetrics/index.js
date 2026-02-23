@@ -218,9 +218,9 @@ async function executeChannelAction(context, token, channelKey, alertConfig, tot
     payload[f.key] = value;
   }
 
-  // Strip null fields but keep empty strings (Data Action template needs all variables)
+  // Strip null/empty optional fields — only send fields with actual values
   for (const [k, v] of Object.entries(payload)) {
-    if (v === null) delete payload[k];
+    if (v === null || v === undefined || v === "") delete payload[k];
   }
 
   const url = `${apiBase}/api/v2/integrations/actions/${def.actionId}/execute`;
