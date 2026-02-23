@@ -15,7 +15,7 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 | **Real-time Chart** | Chart.js 4 line graph with trunk picker ("All" combined or individual trunks), rolling history, and threshold reference line |
 | **Fullscreen** | Hybrid mode — native Fullscreen API when available, CSS-maximised overlay fallback for sandboxed iframes |
 | **Open in New Tab** | Popout button with localStorage-based session handoff so the new tab skips re-authentication |
-| **Trunk History** | Historical peak concurrent-call chart powered by an Azure Functions backend that collects metrics every 5 minutes. Preset and custom date-range picker, peak/avg stats cards, auto-downsampled Chart.js graph |
+| **Trunk History** | Historical peak concurrent-call chart powered by an Azure Functions backend that collects metrics every minute (configurable). Preset and custom date-range picker, peak/avg stats cards, auto-downsampled Chart.js graph |
 
 ## Tech Stack
 
@@ -64,15 +64,17 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 │   ├── host.json                       # Function App runtime config
 │   ├── package.json                    # Node.js dependencies
 │   ├── shared/
+│   │   ├── gcConfig.js                 # Shared region / API base config
 │   │   ├── genesysAuth.js              # Client Credentials OAuth helper
 │   │   └── tableClient.js             # Azure Table Storage read/write
-│   ├── collectTrunkMetrics/            # Timer trigger — every 5 min
+│   ├── collectTrunkMetrics/            # Timer trigger — every 1 min (configurable)
 │   │   ├── function.json
 │   │   └── index.js
 │   └── getTrunkHistory/                # HTTP trigger — GET /api/getTrunkHistory
 │       ├── function.json
 │       └── index.js
 ├── docs/
+│   ├── deployment-guide.md             # Full customer deployment guide
 │   └── trunk-history-peak-tracking.md
 └── .github/
     └── workflows/
@@ -128,7 +130,9 @@ The Azure Functions backend reads its configuration from **App Settings** (envir
 | `GC_CLIENT_ID` | Genesys Cloud Client Credentials OAuth client ID |
 | `GC_CLIENT_SECRET` | Genesys Cloud Client Credentials OAuth client secret |
 | `GC_REGION` | Genesys Cloud region (e.g. `mypurecloud.de`) |
-| `TABLE_STORAGE_CONNECTION` | Azure Storage connection string (if not using `AzureWebJobsStorage`) |
+| `TABLE_STORAGE_CONNECTION` | Azure Storage connection string for Table Storage |
+| `AzureWebJobsStorage` | Same connection string — required by timer triggers for schedule tracking |
+| `WEBSITE_RUN_FROM_PACKAGE` | Set to `1` — ensures the Function App loads the latest code after each deployment |
 
 ## Adding a New Page
 
