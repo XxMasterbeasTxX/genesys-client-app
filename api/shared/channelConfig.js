@@ -23,10 +23,10 @@ const channels = [
     actionId: "custom_-_3af155c2-20c5-4c44-babf-f0a9eb041a47",
     defaults: {
       encoding: "gsm7",
-      expiration: "",
-      header: "",
-      msg_type: "",
-      reference: "",
+      expiration: null,
+      header: null,
+      msg_type: null,
+      reference: null,
     },
     fields: [
       {
