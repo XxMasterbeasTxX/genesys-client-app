@@ -28,12 +28,13 @@ Each Data Action needs an input schema defining the required fields (e.g. `toAdd
 
 Once the Data Action input schemas are known, add per-channel fields to the alert panel:
 
-| Channel | Fields Needed |
-| ------- | ------------- |
+| Channel | Fields Needed                      |
+|---------|------------------------------------|
 | Email   | To address, Subject, Body template |
-| SMS     | Phone number, Message template |
+| SMS     | Phone number, Message template     |
 
 These should be stored in the `channels` object in the `AlertConfig` table, e.g.:
+
 ```json
 {
   "email": { "enabled": true, "to": "...", "subject": "...", "body": "..." },
@@ -48,7 +49,7 @@ These should be stored in the `channels` object in the `AlertConfig` table, e.g.
 
 In `collectTrunkMetrics/index.js`, the `checkThresholdBreach()` function currently logs the breach but does **not** call any Data Action. The placeholder is:
 
-```
+```text
 // (Data Action execution reserved for future implementation.)
 ```
 

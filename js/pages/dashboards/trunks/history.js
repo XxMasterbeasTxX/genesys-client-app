@@ -16,6 +16,10 @@ import {
   CHART_LINE_COLOUR,
   CHART_AVG_COLOUR,
   CHART_PEAK_COLOUR,
+  LABEL_FORMAT_RAW,
+  LABEL_FORMAT_HOUR,
+  LABEL_FORMAT_DAY,
+  TOOLTIP_DATE_FORMAT,
 } from "./historyConfig.js";
 
 /* ── Helpers ───────────────────────────────────────────── */
@@ -42,32 +46,13 @@ function chooseBucket(from, to) {
 
 /** Format a Date to a short readable string (tooltip). */
 function fmtDate(d) {
-  return d.toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return d.toLocaleDateString(undefined, TOOLTIP_DATE_FORMAT);
 }
 
 /** Format a Date as an x-axis label, adapted to the bucket size. */
 function fmtLabel(d, bucket) {
-  if (bucket === "raw") {
-    // Time only — "14:05"
-    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  }
-  if (bucket === "hour") {
-    // Short date + hour — "Feb 23, 14:00"
-    return d.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-  // day — "Feb 23"
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const formats = { raw: LABEL_FORMAT_RAW, hour: LABEL_FORMAT_HOUR, day: LABEL_FORMAT_DAY };
+  return d.toLocaleString(undefined, formats[bucket] || formats.day);
 }
 
 /* ── Main render ───────────────────────────────────────── */

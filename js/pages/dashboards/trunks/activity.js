@@ -13,6 +13,7 @@ import {
   METRICS_BATCH_SIZE,
   CHART_HISTORY_MAX,
   CHART_COLOURS,
+  CHART_LABEL_FORMAT,
 } from "./trunkConfig.js";
 import {
   ALERT_CHANNELS,
@@ -581,7 +582,7 @@ export async function render({ route, me, api }) {
     if (!Chart) { console.warn("Chart.js not loaded"); return; }
 
     const labels = chartHistory.map((p) =>
-      p.ts.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      p.ts.toLocaleTimeString([], CHART_LABEL_FORMAT),
     );
 
     let datasets;

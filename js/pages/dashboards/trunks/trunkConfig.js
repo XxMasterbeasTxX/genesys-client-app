@@ -32,3 +32,7 @@ export const CHART_COLOURS = [
   "#f97316", // orange
   "#6366f1", // indigo
 ];
+
+// ── Date label format ─────────────────────────────────────
+// Intl.DateTimeFormat options for the live chart x-axis labels.
+export const CHART_LABEL_FORMAT = { hour: "2-digit", minute: "2-digit", second: "2-digit" };

@@ -17,3 +17,12 @@ export const CHART_AVG_COLOUR = "#3b82f6";
 
 // Colour for the peak marker dot.
 export const CHART_PEAK_COLOUR = "#ef4444";
+
+// ── Date label formats (Intl.DateTimeFormat options) ──────
+// Controls the x-axis labels at each aggregation level.
+export const LABEL_FORMAT_RAW  = { hour: "2-digit", minute: "2-digit" };
+export const LABEL_FORMAT_HOUR = { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" };
+export const LABEL_FORMAT_DAY  = { month: "short", day: "numeric" };
+
+// Tooltip date format (shown on hover).
+export const TOOLTIP_DATE_FORMAT = { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" };
