@@ -1,5 +1,5 @@
 /**
- * collectTrunkMetrics — Timer Trigger (every 5 minutes)
+ * collectTrunkMetrics — Timer Trigger (every 1 minute)
  *
  * 1. Authenticates to Genesys Cloud (Client Credentials)
  * 2. Fetches all external trunks
@@ -9,12 +9,11 @@
 
 const { getGenesysToken } = require("../shared/genesysAuth");
 const { storeMetric } = require("../shared/tableClient");
+const { apiBase } = require("../shared/gcConfig");
 
 const BATCH_SIZE = 100; // max trunk IDs per metrics request
 
 module.exports = async function (context) {
-  const region = process.env.GC_REGION || "mypurecloud.de";
-  const apiBase = `https://api.${region}`;
 
   try {
     // 1. Authenticate

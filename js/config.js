@@ -1,7 +1,9 @@
+const REGION = "mypurecloud.de";
+
 export const CONFIG = {
-  region: "mypurecloud.de",
-  authHost: "login.mypurecloud.de",
-  apiBase: "https://api.mypurecloud.de",
+  region: REGION,
+  authHost: `login.${REGION}`,
+  apiBase: `https://api.${REGION}`,
   appName: "Genesys Tool",
 
   // OAuth Client Application (Authorization Code + PKCE)

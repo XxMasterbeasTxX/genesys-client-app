@@ -5,6 +5,8 @@
  * variables and caches the token until shortly before expiry.
  */
 
+const { authHost } = require("./gcConfig");
+
 let cachedToken = null;
 let tokenExpiresAt = 0;
 
@@ -16,7 +18,6 @@ async function getGenesysToken() {
 
   const clientId = process.env.GC_CLIENT_ID;
   const clientSecret = process.env.GC_CLIENT_SECRET;
-  const region = process.env.GC_REGION || "mypurecloud.de";
 
   if (!clientId || !clientSecret) {
     throw new Error(
@@ -24,7 +25,6 @@ async function getGenesysToken() {
     );
   }
 
-  const authHost = `login.${region}`;
   const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString(
     "base64",
   );
