@@ -15,7 +15,7 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 | **Real-time Chart** | Chart.js 4 line graph with trunk picker ("All" combined or individual trunks), rolling history, and threshold reference line |
 | **Fullscreen** | Hybrid mode — native Fullscreen API when available, CSS-maximised overlay fallback for sandboxed iframes |
 | **Open in New Tab** | Popout button with localStorage-based session handoff so the new tab skips re-authentication |
-| **Trunk History** | Historical peak concurrent-call chart powered by an Azure Functions backend that collects metrics every minute (configurable). Preset and custom date-range picker, peak/avg stats cards, auto-downsampled Chart.js graph |
+| **Trunk History** | Historical peak concurrent-call chart powered by an Azure Functions backend that collects metrics every minute (configurable). Preset and custom date-range picker, peak/avg stats cards, server-side aggregation (hourly/daily buckets with peak + avg lines) |
 
 ## Tech Stack
 

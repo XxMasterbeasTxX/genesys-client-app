@@ -1,16 +1,20 @@
 /**
  * Dashboards › Trunks › History
  *
- * Shows historical peak concurrent-call data collected by the
+ * Shows historical trunk call data collected by the
  * Azure Function timer (collectTrunkMetrics).
- * Fetches time-series from the getTrunkHistory HTTP function.
+ *
+ * Uses server-side aggregation:
+ *   Today       → raw 1-min samples
+ *   2–7 days    → hourly buckets  (peak + avg per hour)
+ *   8–90+ days  → daily  buckets  (peak + avg per day)
  */
 import { CONFIG } from "../../../config.js";
 import { escapeHtml } from "../../../utils.js";
 import {
   DEFAULT_RANGE_DAYS,
-  CHART_MAX_POINTS,
   CHART_LINE_COLOUR,
+  CHART_AVG_COLOUR,
   CHART_PEAK_COLOUR,
 } from "./historyConfig.js";
 
@@ -28,22 +32,15 @@ function nowUTC() {
   return new Date();
 }
 
-/** Downsample an array to at most `max` evenly-spaced items. */
-function downsample(arr, max) {
-  if (arr.length <= max) return arr;
-  const step = arr.length / max;
-  const out = [];
-  for (let i = 0; i < max; i++) {
-    out.push(arr[Math.floor(i * step)]);
-  }
-  // Always include the last point
-  if (out[out.length - 1] !== arr[arr.length - 1]) {
-    out.push(arr[arr.length - 1]);
-  }
-  return out;
+/** Choose the right aggregation bucket for a date range. */
+function chooseBucket(from, to) {
+  const days = (to - from) / 86_400_000;
+  if (days <= 1) return "raw";
+  if (days <= 7) return "hour";
+  return "day";
 }
 
-/** Format a Date to a short readable string. */
+/** Format a Date to a short readable string (tooltip). */
 function fmtDate(d) {
   return d.toLocaleDateString(undefined, {
     year: "numeric",
@@ -54,11 +51,31 @@ function fmtDate(d) {
   });
 }
 
+/** Format a Date as an x-axis label, adapted to the bucket size. */
+function fmtLabel(d, bucket) {
+  if (bucket === "raw") {
+    // Time only — "14:05"
+    return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  }
+  if (bucket === "hour") {
+    // Short date + hour — "Feb 23, 14:00"
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+  // day — "Feb 23"
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
 /* ── Main render ───────────────────────────────────────── */
 
 export async function render() {
   let chartInstance = null;
-  let rawData = []; // fetched rows
+  let plotData = [];       // data currently shown in the chart
+  let currentBucket = "raw";
 
   // ── DOM skeleton ──────────────────────────────────────
   const root = document.createElement("div");
@@ -153,10 +170,13 @@ export async function render() {
     statusEl.textContent = "Loading…";
     statsRow.innerHTML = "";
 
+    const bucket = chooseBucket(from, to);
+    currentBucket = bucket;
+
     try {
       const url =
         `${CONFIG.functionsBase}/api/getTrunkHistory` +
-        `?from=${from.toISOString()}&to=${to.toISOString()}`;
+        `?from=${from.toISOString()}&to=${to.toISOString()}&bucket=${bucket}`;
 
       const res = await fetch(url);
       if (!res.ok) {
@@ -165,18 +185,20 @@ export async function render() {
       }
 
       const json = await res.json();
-      rawData = json.data || [];
+      plotData = json.data || [];
 
-      if (!rawData.length) {
+      if (!plotData.length) {
         statusEl.textContent =
           "No data for this period. The collector may not have run yet.";
         destroyChart();
         return;
       }
 
-      statusEl.textContent = `${rawData.length} data point(s)`;
-      renderStats(rawData);
-      renderChart(rawData);
+      const bucketLabel = bucket === "raw" ? "samples" : `${bucket}ly buckets`;
+      statusEl.textContent = `${plotData.length} ${bucketLabel}`;
+
+      renderStats(plotData, bucket);
+      renderChart(plotData, bucket);
     } catch (err) {
       console.error("Trunk history fetch failed:", err);
       statusEl.textContent = `Error: ${err.message}`;
@@ -185,21 +207,27 @@ export async function render() {
   }
 
   // ── Stats cards ─────────────────────────────────────────
-  function renderStats(data) {
+  function renderStats(data, bucket) {
     let peak = 0;
     let peakTs = "";
     let sum = 0;
+    let totalSamples = 0;
 
     for (const row of data) {
-      const tc = row.totalCalls ?? 0;
-      sum += tc;
+      // "raw" rows have totalCalls; aggregated rows have peakCalls + avgCalls
+      const tc = row.peakCalls ?? row.totalCalls ?? 0;
+      const avg = row.avgCalls ?? row.totalCalls ?? 0;
+      const samples = row.samples ?? 1;
+
       if (tc > peak) {
         peak = tc;
         peakTs = row.timestamp;
       }
+      sum += avg * samples;
+      totalSamples += samples;
     }
 
-    const avg = data.length ? (sum / data.length).toFixed(1) : "0";
+    const avg = totalSamples ? (sum / totalSamples).toFixed(1) : "0";
     const peakTime = peakTs ? fmtDate(new Date(peakTs)) : "—";
 
     statsRow.innerHTML = `
@@ -216,56 +244,43 @@ export async function render() {
         <div class="trunk-history-stat__label">Avg Concurrent Calls</div>
       </div>
       <div class="trunk-history-stat">
-        <div class="trunk-history-stat__value">${escapeHtml(String(data.length))}</div>
-        <div class="trunk-history-stat__label">Samples</div>
+        <div class="trunk-history-stat__value">${escapeHtml(String(totalSamples))}</div>
+        <div class="trunk-history-stat__label">Total Samples</div>
       </div>
     `;
   }
 
   // ── Chart rendering ─────────────────────────────────────
-  function renderChart(data) {
+  function renderChart(data, bucket) {
     const Chart = window.Chart;
     if (!Chart) {
       statusEl.textContent = "Chart.js not loaded.";
       return;
     }
 
-    // Downsample for large ranges
-    const plotData = downsample(data, CHART_MAX_POINTS);
+    const isRaw = bucket === "raw";
 
-    // Find peak index for annotation
+    // Axis labels
+    const labels = data.map((r) => fmtLabel(new Date(r.timestamp), bucket));
+
+    // Primary values → peak (aggregated) or totalCalls (raw)
+    const peakValues = data.map((r) => r.peakCalls ?? r.totalCalls ?? 0);
+
+    // Find peak index for highlighted dot
     let peakIdx = 0;
-    for (let i = 1; i < plotData.length; i++) {
-      if ((plotData[i].totalCalls ?? 0) > (plotData[peakIdx].totalCalls ?? 0)) {
-        peakIdx = i;
-      }
+    for (let i = 1; i < peakValues.length; i++) {
+      if (peakValues[i] > peakValues[peakIdx]) peakIdx = i;
     }
 
-    const labels = plotData.map((r) => {
-      const d = new Date(r.timestamp);
-      // Show date+time for multi-day, time-only for single day
-      return plotData.length < 300
-        ? d.toLocaleString(undefined, {
-            month: "short",
-            day: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-          })
-        : d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    });
-
-    const values = plotData.map((r) => r.totalCalls ?? 0);
-
-    // Point colours — highlight the peak
-    const pointBg = values.map((_, i) =>
+    const pointBg = peakValues.map((_, i) =>
       i === peakIdx ? CHART_PEAK_COLOUR : CHART_LINE_COLOUR,
     );
-    const pointRadius = values.map((_, i) => (i === peakIdx ? 6 : 1));
+    const pointRadius = peakValues.map((_, i) => (i === peakIdx ? 6 : 1));
 
     const datasets = [
       {
-        label: "Concurrent Calls",
-        data: values,
+        label: isRaw ? "Concurrent Calls" : "Peak Calls",
+        data: peakValues,
         borderColor: CHART_LINE_COLOUR,
         backgroundColor: CHART_LINE_COLOUR + "22",
         fill: true,
@@ -275,6 +290,23 @@ export async function render() {
         pointHoverRadius: 5,
       },
     ];
+
+    // Add average line for aggregated data
+    if (!isRaw) {
+      const avgValues = data.map((r) => r.avgCalls ?? 0);
+      datasets.push({
+        label: "Avg Calls",
+        data: avgValues,
+        borderColor: CHART_AVG_COLOUR + "88",
+        backgroundColor: "transparent",
+        borderDash: [6, 4],
+        borderWidth: 1.5,
+        fill: false,
+        tension: 0.3,
+        pointRadius: 0,
+        pointHoverRadius: 4,
+      });
+    }
 
     if (chartInstance) {
       chartInstance.data.labels = labels;
@@ -291,15 +323,23 @@ export async function render() {
           interaction: { mode: "index", intersect: false },
           plugins: {
             legend: {
-              display: false,
+              display: !isRaw,
+              position: "bottom",
+              labels: { color: "#93a4b8", boxWidth: 12 },
             },
             tooltip: {
               callbacks: {
                 title: (items) => {
                   const idx = items[0]?.dataIndex;
                   if (idx == null) return "";
-                  const d = new Date(plotData[idx].timestamp);
+                  const d = new Date(data[idx].timestamp);
                   return fmtDate(d);
+                },
+                afterBody: (items) => {
+                  const idx = items[0]?.dataIndex;
+                  if (idx == null || isRaw) return "";
+                  const row = data[idx];
+                  return row.samples ? `Samples: ${row.samples}` : "";
                 },
               },
             },

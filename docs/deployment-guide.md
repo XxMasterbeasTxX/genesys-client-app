@@ -371,7 +371,7 @@ These files contain customer-tunable settings. Adjust as needed:
 | Setting | Default | Description |
 | --- | --- | --- |
 | `DEFAULT_RANGE_DAYS` | `7` | Date range shown on page load |
-| `CHART_MAX_POINTS` | `500` | Auto-downsample threshold |
+| `CHART_AVG_COLOUR` | `#3b82f6` | Colour for the dashed average line |
 | `CHART_LINE_COLOUR` | `#3b82f6` | Main line colour |
 | `CHART_PEAK_COLOUR` | `#ef4444` | Peak marker colour |
 
