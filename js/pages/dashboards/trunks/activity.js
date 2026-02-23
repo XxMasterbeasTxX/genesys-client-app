@@ -7,13 +7,18 @@
 import { NotificationService } from "../../../services/notificationService.js";
 import { escapeHtml } from "../../../utils.js";
 import { saveTabHandoff } from "../../../services/authService.js";
+import { CONFIG } from "../../../config.js";
 import {
-  CALL_THRESHOLD,
   POLL_INTERVAL_MS,
   METRICS_BATCH_SIZE,
   CHART_HISTORY_MAX,
   CHART_COLOURS,
 } from "./trunkConfig.js";
+import {
+  ALERT_CHANNELS,
+  DEFAULT_THRESHOLD,
+  DEFAULT_COOLDOWN_MINUTES,
+} from "./alertConfig.js";
 
 /**
  * Strip trailing UUID / ID suffix from trunk names returned by the API.
@@ -41,6 +46,12 @@ export async function render({ route, me, api }) {
   let pollTimer = null;          // periodic REST poll handle
   let tabFlashTimer = null;      // tab title flash interval
   const originalTitle = document.title;
+
+  // ── Alert config loaded from backend ────────────────────
+  let alertThreshold = DEFAULT_THRESHOLD;
+  let alertCooldown = DEFAULT_COOLDOWN_MINUTES;
+  let alertChannels = {};          // { email: { enabled }, sms: { enabled } }
+  let alertPanelOpen = false;
 
   // ── DOM skeleton ────────────────────────────────────────
   const root = document.createElement("div");
@@ -216,7 +227,138 @@ export async function render({ route, me, api }) {
 
   header.append(fullscreenBtn, popoutBtn);
 
-  root.append(header, warningBanner, filterSection, graphSection, tableSection);
+  // ── Alert bell button ───────────────────────────────────
+  const alertBtn = document.createElement("button");
+  alertBtn.className = "btn btn-sm trunk-alert-toggle";
+  alertBtn.textContent = "🔔 Alerts";
+  alertBtn.addEventListener("click", () => {
+    alertPanelOpen = !alertPanelOpen;
+    alertPanel.classList.toggle("hidden", !alertPanelOpen);
+    alertOverlay.classList.toggle("hidden", !alertPanelOpen);
+  });
+  header.append(alertBtn);
+
+  // ── Alert slide-out panel ───────────────────────────────
+  const alertOverlay = document.createElement("div");
+  alertOverlay.className = "trunk-alert-overlay hidden";
+  alertOverlay.addEventListener("click", () => closeAlertPanel());
+
+  const alertPanel = document.createElement("div");
+  alertPanel.className = "trunk-alert-panel hidden";
+
+  alertPanel.innerHTML = `
+    <div class="trunk-alert-panel__header">
+      <h3>Alert Settings</h3>
+      <button class="btn btn-sm trunk-alert-close" title="Close">&times;</button>
+    </div>
+    <div class="trunk-alert-panel__body">
+      <label class="trunk-alert-field">
+        <span>Threshold (concurrent calls)</span>
+        <input type="number" min="0" step="1" class="trunk-alert-input" data-field="threshold" />
+        <small class="trunk-alert-hint">Set to 0 to disable alerts entirely.</small>
+      </label>
+      <label class="trunk-alert-field">
+        <span>Cooldown (minutes)</span>
+        <input type="number" min="0" step="1" class="trunk-alert-input" data-field="cooldown" />
+        <small class="trunk-alert-hint">Minimum time between backend alerts.</small>
+      </label>
+      <fieldset class="trunk-alert-channels">
+        <legend>Notification Channels</legend>
+      </fieldset>
+      <div class="trunk-alert-actions">
+        <button class="btn btn-sm trunk-alert-save">Save</button>
+        <button class="btn btn-sm trunk-alert-cancel">Cancel</button>
+      </div>
+      <div class="trunk-alert-status"></div>
+    </div>
+  `;
+
+  // Populate channel toggles from ALERT_CHANNELS
+  const channelFieldset = alertPanel.querySelector(".trunk-alert-channels");
+  for (const ch of ALERT_CHANNELS) {
+    const lbl = document.createElement("label");
+    lbl.className = "trunk-alert-channel-toggle";
+    lbl.innerHTML = `<input type="checkbox" data-channel="${ch.key}" /> <span>${escapeHtml(ch.label)}</span>`;
+    channelFieldset.append(lbl);
+  }
+
+  // Panel event listeners
+  alertPanel.querySelector(".trunk-alert-close").addEventListener("click", closeAlertPanel);
+  alertPanel.querySelector(".trunk-alert-cancel").addEventListener("click", closeAlertPanel);
+  alertPanel.querySelector(".trunk-alert-save").addEventListener("click", saveAlertSettings);
+
+  function closeAlertPanel() {
+    alertPanelOpen = false;
+    alertPanel.classList.add("hidden");
+    alertOverlay.classList.add("hidden");
+  }
+
+  function populateAlertPanel() {
+    alertPanel.querySelector('[data-field="threshold"]').value = alertThreshold;
+    alertPanel.querySelector('[data-field="cooldown"]').value = alertCooldown;
+    for (const ch of ALERT_CHANNELS) {
+      const cb = alertPanel.querySelector(`[data-channel="${ch.key}"]`);
+      if (cb) cb.checked = alertChannels[ch.key]?.enabled ?? false;
+    }
+    alertPanel.querySelector(".trunk-alert-status").textContent = "";
+  }
+
+  async function loadAlertConfig() {
+    try {
+      const res = await fetch(`${CONFIG.functionsBase}/api/alertConfig`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const cfg = await res.json();
+      alertThreshold = cfg.threshold ?? DEFAULT_THRESHOLD;
+      alertCooldown = cfg.cooldownMinutes ?? DEFAULT_COOLDOWN_MINUTES;
+      alertChannels = cfg.channels ?? {};
+    } catch (err) {
+      console.warn("Failed to load alert config:", err);
+    }
+    // Update bell icon state
+    alertBtn.classList.toggle("trunk-alert-toggle--active", alertThreshold > 0);
+  }
+
+  async function saveAlertSettings() {
+    const statusEl = alertPanel.querySelector(".trunk-alert-status");
+    const thresholdVal = Number(alertPanel.querySelector('[data-field="threshold"]').value) || 0;
+    const cooldownVal = Number(alertPanel.querySelector('[data-field="cooldown"]').value) || 0;
+    const channels = {};
+    for (const ch of ALERT_CHANNELS) {
+      const cb = alertPanel.querySelector(`[data-channel="${ch.key}"]`);
+      channels[ch.key] = { enabled: cb?.checked ?? false };
+    }
+
+    statusEl.textContent = "Saving…";
+    statusEl.className = "trunk-alert-status";
+
+    try {
+      const res = await fetch(`${CONFIG.functionsBase}/api/alertConfig`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ threshold: thresholdVal, cooldownMinutes: cooldownVal, channels }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      const saved = await res.json();
+      alertThreshold = saved.threshold;
+      alertCooldown = saved.cooldownMinutes;
+      alertChannels = saved.channels;
+      alertBtn.classList.toggle("trunk-alert-toggle--active", alertThreshold > 0);
+      statusEl.textContent = "✓ Saved";
+      statusEl.classList.add("trunk-alert-status--ok");
+
+      // Re-check threshold with updated value immediately
+      renderTable();
+      if (chartVisible) renderChart();
+    } catch (err) {
+      statusEl.textContent = `✗ ${err.message}`;
+      statusEl.classList.add("trunk-alert-status--err");
+    }
+  }
+
+  root.append(header, warningBanner, alertOverlay, alertPanel, filterSection, graphSection, tableSection);
 
   // ── Helper: render the filter checkbox list ─────────────
   function renderFilterList() {
@@ -329,17 +471,17 @@ export async function render({ route, me, api }) {
   let breached = false;
 
   function checkThreshold(totalCalls) {
-    const nowBreached = CALL_THRESHOLD > 0 && totalCalls >= CALL_THRESHOLD;
+    const nowBreached = alertThreshold > 0 && totalCalls >= alertThreshold;
 
     if (nowBreached && !breached) {
       // Started breaching
       breached = true;
-      warningBanner.textContent = `⚠ THRESHOLD EXCEEDED: ${totalCalls} / ${CALL_THRESHOLD} concurrent calls`;
+      warningBanner.textContent = `⚠ THRESHOLD EXCEEDED: ${totalCalls} / ${alertThreshold} concurrent calls`;
       warningBanner.classList.remove("hidden");
       startTabFlash(totalCalls);
     } else if (nowBreached && breached) {
       // Still breaching — update numbers
-      warningBanner.textContent = `⚠ THRESHOLD EXCEEDED: ${totalCalls} / ${CALL_THRESHOLD} concurrent calls`;
+      warningBanner.textContent = `⚠ THRESHOLD EXCEEDED: ${totalCalls} / ${alertThreshold} concurrent calls`;
       updateTabFlash(totalCalls);
     } else if (!nowBreached && breached) {
       // Recovered
@@ -473,10 +615,10 @@ export async function render({ route, me, api }) {
     }
 
     // Threshold reference line
-    if (CALL_THRESHOLD > 0) {
+    if (alertThreshold > 0) {
       datasets.push({
-        label: `Threshold (${CALL_THRESHOLD})`,
-        data: chartHistory.map(() => CALL_THRESHOLD),
+        label: `Threshold (${alertThreshold})`,
+        data: chartHistory.map(() => alertThreshold),
         borderColor: "#ef4444",
         borderDash: [6, 4],
         borderWidth: 1.5,
@@ -634,6 +776,10 @@ export async function render({ route, me, api }) {
     renderFilterList();
     renderGraphPicker();
     renderTable();
+
+    // Load alert config from backend (non-blocking)
+    await loadAlertConfig();
+    populateAlertPanel();
 
     // 2. Start notification service (WebSocket for instant updates)
     notifService = new NotificationService({

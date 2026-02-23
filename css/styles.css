@@ -365,6 +365,133 @@ body {
   gap: 14px;
 }
 
+/* ── Alert panel (slide-out) ─────────────────────────────── */
+.trunk-alert-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 900;
+}
+.trunk-alert-overlay.hidden { display: none; }
+
+.trunk-alert-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 340px;
+  max-width: 90vw;
+  height: 100%;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  box-shadow: -6px 0 24px rgba(0, 0, 0, 0.35);
+  z-index: 910;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  transition: transform 0.25s ease;
+}
+.trunk-alert-panel.hidden {
+  display: none;
+}
+
+.trunk-alert-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.trunk-alert-panel__header h3 { margin: 0; font-size: 1rem; }
+
+.trunk-alert-close {
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.trunk-alert-panel__body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.trunk-alert-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+.trunk-alert-field span { font-weight: 600; }
+
+.trunk-alert-input {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.85rem;
+  color-scheme: dark;
+}
+
+.trunk-alert-hint {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.trunk-alert-channels {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin: 0;
+}
+.trunk-alert-channels legend {
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0 6px;
+}
+
+.trunk-alert-channel-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.trunk-alert-channel-toggle input[type="checkbox"] {
+  accent-color: #3b82f6;
+}
+
+.trunk-alert-actions {
+  display: flex;
+  gap: 8px;
+}
+.trunk-alert-save {
+  background: #3b82f6 !important;
+  color: #fff !important;
+  border-color: #3b82f6 !important;
+}
+.trunk-alert-save:hover { background: #2563eb !important; }
+.trunk-alert-cancel {
+  color: var(--muted) !important;
+}
+
+.trunk-alert-status {
+  font-size: 0.8rem;
+  min-height: 1.2em;
+}
+.trunk-alert-status--ok { color: #22c55e; }
+.trunk-alert-status--err { color: #ef4444; }
+
+/* Bell button states */
+.trunk-alert-toggle--active {
+  color: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+}
+
 /* ═══════════════════════════════════════════════════════════
    Trunk History page
    ═══════════════════════════════════════════════════════════ */

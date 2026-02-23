@@ -350,10 +350,20 @@ These files contain customer-tunable settings. Adjust as needed:
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `CALL_THRESHOLD` | `1` | Warn when total concurrent calls reach this value. Set `0` to disable. |
 | `POLL_INTERVAL_MS` | `15000` | REST polling fallback interval (ms) when WebSocket is unavailable |
 | `METRICS_BATCH_SIZE` | `100` | Max trunk IDs per API call |
 | `CHART_HISTORY_MAX` | `120` | Rolling chart data points |
+| `CHART_COLOURS` | Blue, green, … | 10-colour palette for chart lines |
+
+**`js/pages/dashboards/trunks/alertConfig.js`** — Alert channel definitions:
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `ALERT_CHANNELS` | Email, SMS | Available notification channels (keys must match backend Data Actions) |
+| `DEFAULT_THRESHOLD` | `0` | Default threshold value when no config is saved (0 = disabled) |
+| `DEFAULT_COOLDOWN_MINUTES` | `15` | Default cooldown between backend alerts |
+
+> **Note:** The alert threshold is now configurable from the in-app **🔔 Alerts** panel on the Activity page, and is stored in Azure Table Storage (`AlertConfig` table). It is no longer a hardcoded value.
 | `CHART_COLOURS` | Blue, green, … | 10-colour palette for chart lines |
 
 **`js/pages/dashboards/trunks/historyConfig.js`** — Trunk history:

@@ -3,12 +3,10 @@
  *
  * All customer-tunable settings for the trunk activity dashboard
  * live here. Internal implementation details stay in activity.js.
+ *
+ * Alert threshold is now stored in the backend (AlertConfig table)
+ * and managed from the in-app alert panel.
  */
-
-// ── Thresholds ────────────────────────────────────────────
-// Warn when total concurrent calls across selected trunks reaches this value.
-// Set to 0 to disable threshold warnings entirely.
-export const CALL_THRESHOLD = 1;
 
 // ── Polling & batching ────────────────────────────────────
 // How often (ms) to poll the REST API when WebSocket is unavailable.

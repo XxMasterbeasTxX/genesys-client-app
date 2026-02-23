@@ -5,11 +5,13 @@
  * 2. Fetches all external trunks
  * 3. Retrieves current concurrent-call metrics per trunk
  * 4. Stores a timestamped snapshot in Azure Table Storage
+ * 5. Checks if total calls breach the configured threshold
  */
 
 const { getGenesysToken } = require("../shared/genesysAuth");
 const { storeMetric } = require("../shared/tableClient");
 const { apiBase } = require("../shared/gcConfig");
+const { getAlertConfig, getAlertState, saveAlertState } = require("../shared/alertStore");
 
 const BATCH_SIZE = 100; // max trunk IDs per metrics request
 
@@ -62,6 +64,9 @@ module.exports = async function (context) {
     context.log(
       `Stored: ${totalCalls} total calls across ${Object.keys(perTrunk).length} trunk(s) at ${now.toISOString()}`,
     );
+
+    // 6. Threshold breach detection
+    await checkThresholdBreach(context, totalCalls, now);
   } catch (err) {
     context.log.error("collectTrunkMetrics failed:", err.message || err);
     throw err; // surface to Azure monitoring
@@ -111,4 +116,68 @@ async function apiRequest(apiBase, token, path) {
   }
 
   return res.json();
+}
+
+/* ── Threshold breach detection ────────────────────────── */
+
+/**
+ * Compares totalCalls against the saved threshold.
+ * If threshold is 0 (disabled) → skip.
+ * If breached and cooldown has elapsed → log alert (Data Action call reserved for future).
+ * Tracks breach state in AlertState table.
+ */
+async function checkThresholdBreach(context, totalCalls, now) {
+  let config;
+  try {
+    config = await getAlertConfig();
+  } catch (err) {
+    context.log.warn("Could not read alert config — skipping breach check:", err.message);
+    return;
+  }
+
+  // Threshold disabled
+  if (!config.threshold || config.threshold <= 0) return;
+
+  const breached = totalCalls >= config.threshold;
+
+  let state;
+  try {
+    state = await getAlertState();
+  } catch (err) {
+    context.log.warn("Could not read alert state — skipping breach check:", err.message);
+    return;
+  }
+
+  if (breached) {
+    const cooldownMs = (config.cooldownMinutes || 0) * 60 * 1000;
+    const lastTime = state.lastAlertTime ? new Date(state.lastAlertTime).getTime() : 0;
+    const elapsed = now.getTime() - lastTime;
+
+    if (!state.breachActive || elapsed >= cooldownMs) {
+      // Fire alert (future: execute Data Action per enabled channel)
+      const enabledChannels = Object.entries(config.channels || {})
+        .filter(([, v]) => v.enabled)
+        .map(([k]) => k);
+
+      context.log.warn(
+        `⚠ THRESHOLD BREACH: ${totalCalls} calls ≥ ${config.threshold}. ` +
+          `Enabled channels: [${enabledChannels.join(", ") || "none"}]. ` +
+          `(Data Action execution reserved for future implementation.)`,
+      );
+
+      await saveAlertState({
+        breachActive: true,
+        lastAlertTime: now.toISOString(),
+      });
+    } else {
+      context.log(
+        `Threshold breached (${totalCalls} ≥ ${config.threshold}) but cooldown active ` +
+          `(${Math.round((cooldownMs - elapsed) / 60000)} min remaining).`,
+      );
+    }
+  } else if (state.breachActive) {
+    // Breach cleared
+    context.log(`Threshold cleared (${totalCalls} < ${config.threshold}). Resetting breach state.`);
+    await saveAlertState({ breachActive: false, lastAlertTime: state.lastAlertTime });
+  }
 }
