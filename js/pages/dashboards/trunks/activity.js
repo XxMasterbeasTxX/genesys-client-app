@@ -33,6 +33,32 @@ function cleanTrunkName(raw) {
 /**
  * Main render entry point — called by the page registry.
  */
+// ── Session persistence keys ────────────────────────────
+const SS_SELECTED   = "trunkActivity.selectedIds";
+const SS_CHART_VIS  = "trunkActivity.chartVisible";
+const SS_CHART_IDS  = "trunkActivity.chartTrunkIds";
+
+function saveSession(selectedIds, chartVisible, chartTrunkIds) {
+  try {
+    sessionStorage.setItem(SS_SELECTED, JSON.stringify([...selectedIds]));
+    sessionStorage.setItem(SS_CHART_VIS, JSON.stringify(chartVisible));
+    sessionStorage.setItem(SS_CHART_IDS, JSON.stringify([...chartTrunkIds]));
+  } catch (_) { /* storage full / unavailable — ignore */ }
+}
+
+function loadSession() {
+  try {
+    const sel = JSON.parse(sessionStorage.getItem(SS_SELECTED) || "null");
+    const vis = JSON.parse(sessionStorage.getItem(SS_CHART_VIS) || "null");
+    const gIds = JSON.parse(sessionStorage.getItem(SS_CHART_IDS) || "null");
+    return {
+      selectedIds: Array.isArray(sel) ? new Set(sel) : null,
+      chartVisible: typeof vis === "boolean" ? vis : null,
+      chartTrunkIds: Array.isArray(gIds) ? new Set(gIds) : null,
+    };
+  } catch (_) { return {}; }
+}
+
 export async function render({ route, me, api }) {
   // ── State ───────────────────────────────────────────────
   let allTrunks = [];            // full list from API (deduplicated)
@@ -163,6 +189,7 @@ export async function render({ route, me, api }) {
     graphSection.classList.toggle("hidden", !chartVisible);
     graphToggleBtn.textContent = chartVisible ? "📈 Hide Graph" : "📈 Show Graph";
     if (chartVisible) renderChart();
+    saveSession(selectedIds, chartVisible, chartTrunkIds);
   });
   header.append(graphToggleBtn);
 
@@ -466,6 +493,11 @@ export async function render({ route, me, api }) {
     onSelectionChanged();
   }
 
+  /** Persist preferences whenever selection or graph state changes. */
+  function persistPrefs() {
+    saveSession(selectedIds, chartVisible, chartTrunkIds);
+  }
+
   // ── Helper: render the metrics table body ───────────────
   function renderTable() {
     const tbody = root.querySelector("#trunkTableBody");
@@ -597,6 +629,7 @@ export async function render({ route, me, api }) {
       chartTrunkIds.clear();
       renderGraphPicker();
       if (chartVisible) renderChart();
+      persistPrefs();
     });
     const allSpan = document.createElement("span");
     allSpan.textContent = "All (combined)";
@@ -618,6 +651,7 @@ export async function render({ route, me, api }) {
         // If nothing specific is selected, revert to "All"
         renderGraphPicker();
         if (chartVisible) renderChart();
+        persistPrefs();
       });
       const span = document.createElement("span");
       span.textContent = trunk._cleanName;
@@ -774,6 +808,7 @@ export async function render({ route, me, api }) {
     renderTable();
     fetchMetrics();
     updateSubscriptions();
+    persistPrefs();
   }
 
   function updateSubscriptions() {
@@ -842,6 +877,26 @@ export async function render({ route, me, api }) {
       return trunk;
     });
     allTrunks.sort((a, b) => a._cleanName.localeCompare(b._cleanName));
+
+    // Restore preferences from session (if navigating back)
+    const saved = loadSession();
+    if (saved.selectedIds) {
+      // Only restore IDs that still exist in the trunk list
+      const validIds = new Set(allTrunks.map((t) => t.id));
+      for (const id of saved.selectedIds) {
+        if (validIds.has(id)) selectedIds.add(id);
+      }
+    }
+    if (saved.chartVisible != null) chartVisible = saved.chartVisible;
+    if (saved.chartTrunkIds) {
+      for (const id of saved.chartTrunkIds) {
+        if (selectedIds.has(id)) chartTrunkIds.add(id);
+      }
+    }
+
+    // Apply restored graph visibility
+    graphSection.classList.toggle("hidden", !chartVisible);
+    graphToggleBtn.textContent = chartVisible ? "📈 Hide Graph" : "📈 Show Graph";
 
     renderFilterList();
     renderGraphPicker();

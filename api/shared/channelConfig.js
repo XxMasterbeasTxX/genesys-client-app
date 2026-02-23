@@ -30,14 +30,14 @@ const channels = [
         label: "Phone Number",
         type: "tel",
         placeholder: "+45…",
-        hint: "International format including country code.",
+        hint: "International format including country code (Without the +).",
       },
       {
         key: "sender",
         label: "Sender Name",
         type: "text",
         placeholder: "e.g. CompanyName",
-        hint: "Alphanumeric sender ID (max 11 chars).",
+        hint: "Alphanumeric sender ID (max 11 chars and no spaces).",
       },
       {
         key: "text",
