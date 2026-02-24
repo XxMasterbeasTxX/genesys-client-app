@@ -62,7 +62,14 @@
               await writable.write(blob);
               await writable.close();
               msgEl.textContent = "\u2705 Saved: " + fileName;
-              subEl.textContent = "You can close this tab now.";
+              btnEl.style.display = "none";
+              var countdown = 3;
+              subEl.textContent = "Closing in " + countdown + "s…";
+              var timer = setInterval(function () {
+                countdown--;
+                if (countdown <= 0) { clearInterval(timer); window.close(); }
+                else { subEl.textContent = "Closing in " + countdown + "s…"; }
+              }, 1000);
               return;
             }
           } catch (e) {

@@ -716,12 +716,9 @@ export async function render({ route, me, api }) {
 
   // ── Export to Excel (two-sheet XLSX) ───────────────────
   function exportToExcel() {
-    console.log("[Export] clicked – XLSX available:", typeof XLSX !== "undefined");
-    console.log("[Export] conversations:", conversations.length, "enriched:", enriched.size);
     try {
       if (typeof XLSX === "undefined") {
         statusEl.textContent = "⚠ Excel library not loaded. Please reload the page.";
-        console.error("[Export] XLSX global is undefined – library did not load");
         return;
       }
 
@@ -751,7 +748,6 @@ export async function render({ route, me, api }) {
         });
       }
 
-      console.log("[Export] interactionRows:", interactionRows.length);
       if (!interactionRows.length) {
         statusEl.textContent = "⚠ No checklist data to export.";
         return;
@@ -825,9 +821,7 @@ export async function render({ route, me, api }) {
         statusEl.textContent = "⚠ Pop-up blocked. Please allow pop-ups for this site and try again.";
         return;
       }
-      console.log("[Export] opened download helper with hash data:", fileName, "(b64 length:", b64.length, ")");
     } catch (err) {
-      console.error("Export failed:", err);
       statusEl.textContent = `⚠ Export failed: ${err.message}`;
     }
   }
