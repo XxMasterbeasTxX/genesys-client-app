@@ -273,12 +273,26 @@ export async function render({ route, me, api }) {
   const tableWrap = document.createElement("div");
   tableWrap.className = "checklist-table-wrap";
 
+  // ── Chart ──────────────────────────────────────────────
+  const chartWrap = document.createElement("div");
+  chartWrap.className = "checklist-chart-wrap";
+  chartWrap.hidden = true;
+  const chartCanvas = document.createElement("canvas");
+  chartCanvas.id = "checklistChart";
+  chartWrap.append(chartCanvas);
+  let chartInstance = null;
+
   // ── Drill-down panel ───────────────────────────────────
   const drillPanel = document.createElement("div");
   drillPanel.className = "checklist-drilldown";
   drillPanel.hidden = true;
 
-  root.append(header, filterBar, statusBar, statusEl, tableWrap, drillPanel);
+  // ── Content area: table on left, chart on right ────────
+  const contentArea = document.createElement("div");
+  contentArea.className = "checklist-content-area";
+  contentArea.append(tableWrap, chartWrap);
+
+  root.append(header, filterBar, statusBar, statusEl, contentArea, drillPanel);
 
   // ── Preset highlighting ────────────────────────────────
   function setActivePreset(days) {
@@ -591,6 +605,79 @@ export async function render({ route, me, api }) {
       }
       row.hidden = info.completion !== statusFilter;
     }
+    updateChart();
+  }
+
+  // ── Update completion bar chart ────────────────────────
+  function updateChart() {
+    // Count complete / incomplete from visible (filtered) rows
+    let complete = 0;
+    let incomplete = 0;
+    const rows = tableWrap.querySelectorAll(".checklist-row");
+    for (const row of rows) {
+      if (row.hidden) continue;
+      const info = enriched.get(row.dataset.convId);
+      if (!info?.checklists?.length) continue;
+      if (info.completion === STATUS_FILTER.COMPLETE) complete++;
+      else incomplete++;
+    }
+
+    const hasData = complete + incomplete > 0;
+    chartWrap.hidden = !hasData;
+    if (!hasData) {
+      if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+      return;
+    }
+
+    const data = {
+      labels: ["Complete", "Incomplete"],
+      datasets: [{
+        data: [complete, incomplete],
+        backgroundColor: ["rgba(74,222,128,0.7)", "rgba(251,191,36,0.7)"],
+        borderColor: ["rgba(74,222,128,1)", "rgba(251,191,36,1)"],
+        borderWidth: 1,
+        borderRadius: 4,
+        barPercentage: 0.6,
+      }],
+    };
+
+    const options = {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        title: {
+          display: true,
+          text: "Checklist Completion",
+          color: "#e0e0e0",
+          font: { size: 13, weight: "600" },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: "#aaa", font: { size: 11 } },
+          grid: { display: false },
+        },
+        y: {
+          beginAtZero: true,
+          ticks: {
+            color: "#aaa",
+            font: { size: 11 },
+            stepSize: 1,
+            precision: 0,
+          },
+          grid: { color: "rgba(255,255,255,0.06)" },
+        },
+      },
+    };
+
+    if (chartInstance) {
+      chartInstance.data = data;
+      chartInstance.options = options;
+      chartInstance.update();
+    } else {
+      chartInstance = new Chart(chartCanvas, { type: "bar", data, options });
+    }
   }
 
   // ── Update a single row after enrichment ───────────────
@@ -643,6 +730,7 @@ export async function render({ route, me, api }) {
 
     // Show export button once enrichment is done
     exportBtn.hidden = !withChecklist;
+    updateChart();
   }
 
   async function enrichOne(conv) {
