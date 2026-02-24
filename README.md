@@ -19,13 +19,14 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 | **Alert System** | Configurable call-count threshold with cooldown. When breached, executes Genesys Cloud Data Actions to send SMS notifications (Email placeholder ready). Per-channel fields (phone number, sender, message) configured from the in-app alert panel. Channel definitions driven by a shared backend config (`channelConfig.js`) — adding a new channel requires only a config entry. |
 | **Agent Copilot Checklists** | Historical view of interactions that used Agent Copilot checklists. Cascading multi-select filters (Copilot → Queue → Agent), configurable period selector with 31-day API limit validation, background enrichment with abort-on-re-search. Drill-down shows individual checklist items with agent/AI tick status. Status filtering (All / Completed / Incomplete) — "All" automatically hides interactions without checklist data. |
 | **Completion Bar Chart** | Chart.js 4 bar chart showing Complete vs Incomplete counts for the currently filtered results. Positioned alongside the filter bar; colours, fonts, and sizing are all configurable in `checklistConfig.js`. |
-| **Excel Export** | Two-sheet XLSX export (Interactions + Checklist Items) powered by SheetJS. Works inside the cross-origin Genesys Cloud iframe via a `download.html` helper page that uses `showSaveFilePicker()` with a real user gesture. Column widths, filename prefix, and all labels are configurable in `checklistConfig.js`. |
+| **Excel Export** | Three-sheet XLSX export (Summary, Interactions, Checklist Items) powered by SheetJS. Works inside the cross-origin Genesys Cloud iframe via a `download.html` helper page that uses `showSaveFilePicker()` with a real user gesture. Column widths, filename prefix, and all labels are configurable in `checklistConfig.js`. |
+| **Light / Dark Theme** | Automatically follows the browser / OS colour scheme via `@media (prefers-color-scheme: light)`. All backgrounds, text, borders, badges, and chart metadata colours adapt instantly — no page reload needed. Chart.js instances re-render on theme change via a `matchMedia` listener. |
 
 ## Tech Stack
 
 - **Front-end** — Vanilla JS, ES modules (`type="module"`), no build step
 - **Routing** — Hash-based SPA router
-- **Charts** — [Chart.js 4](https://www.chartjs.org/) via CDN
+- **Charts** — [Chart.js 4](https://www.chartjs.org/) via CDN (theme-aware axis/grid colours via CSS custom properties)
 - **Excel** — [SheetJS](https://sheetjs.com/) (xlsx-0.20.3, hosted locally at `js/lib/xlsx.full.min.js`)
 - **Auth** — OAuth 2.0 PKCE (OIDC scopes `openid profile email`)
 - **Real-time** — Genesys Cloud WebSocket notifications with REST subscription management

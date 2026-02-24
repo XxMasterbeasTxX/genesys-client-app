@@ -392,11 +392,11 @@ These files contain customer-tunable settings. Adjust as needed:
 | `TICK_STATE` | `Ticked/Unticked` | API tick state values (frozen enum) |
 | `STATUS_FILTER` | `all/complete/incomplete` | Client-side filter values (frozen enum) |
 | `CHART_CONFIG.title` | `Checklist Completion` | Bar chart heading text |
-| `CHART_CONFIG.titleColor` | `#e0e0e0` | Chart title colour |
+| `CHART_CONFIG.titleColor` | `#e0e0e0` | Chart title colour (dark-mode fallback; overridden by `--chart-title` CSS variable) |
 | `CHART_CONFIG.titleFontSize` | `13` | Chart title font size (px) |
-| `CHART_CONFIG.axisColor` | `#aaa` | Axis tick/label colour |
+| `CHART_CONFIG.axisColor` | `#aaa` | Axis tick/label colour (dark-mode fallback; overridden by `--chart-text` CSS variable) |
 | `CHART_CONFIG.axisFontSize` | `11` | Axis tick font size (px) |
-| `CHART_CONFIG.gridColor` | `rgba(255,255,255,0.06)` | Horizontal grid line colour |
+| `CHART_CONFIG.gridColor` | `rgba(255,255,255,0.06)` | Horizontal grid line colour (dark-mode fallback; overridden by `--chart-grid` CSS variable) |
 | `CHART_CONFIG.completeColor` | `rgba(74,222,128,0.7)` | "Complete" bar fill colour |
 | `CHART_CONFIG.incompleteColor` | `rgba(251,191,36,0.7)` | "Incomplete" bar fill colour |
 | `CHART_CONFIG.borderRadius` | `4` | Bar corner radius (px) |
@@ -433,11 +433,21 @@ This is a **6-field CRON expression** (second minute hour day month day-of-week)
 
 Enable or disable dashboard sections by setting `enabled: true/false` on any node. Disabled nodes (and all descendants) are hidden from the sidebar and routing.
 
-### 7.5 Backend Region — `api/shared/gcConfig.js`
+### 7.5 Light / Dark Theme
+
+The app automatically follows the browser / OS colour scheme. No configuration is needed — it works out of the box via `@media (prefers-color-scheme: light)` in `css/styles.css`.
+
+- **CSS variables** (`--bg`, `--panel`, `--text`, `--border`, etc.) are overridden inside the light-mode media query.
+- **Chart.js** axis labels, grid lines, and title colours are read from three additional CSS custom properties at render time: `--chart-text`, `--chart-grid`, `--chart-title`.
+- A `matchMedia` change listener in each chart page (Activity, History, Agent Checklists) destroys and re-creates the chart automatically when the OS theme switches, so colours update without a page reload.
+
+To **customise** light-mode colours, edit the `@media (prefers-color-scheme: light)` block at the bottom of `css/styles.css`.
+
+### 7.6 Backend Region — `api/shared/gcConfig.js`
 
 The backend reads `GC_REGION` from environment variables (set in Step 6.3). The fallback default is `mypurecloud.de`. No code change needed if the environment variable is set correctly.
 
-### 7.6 Notification Channels — `api/shared/channelConfig.js`
+### 7.7 Notification Channels — `api/shared/channelConfig.js`
 
 This file is the **single source of truth** for all notification channels (SMS, Email, etc.). The frontend loads channel definitions from the backend — no frontend changes are needed when adding or modifying channels.
 
@@ -545,6 +555,7 @@ Run through these checks after deployment:
 - [ ] Open the SWA URL in a browser
 - [ ] Confirm the OAuth login redirects to Genesys Cloud
 - [ ] After login, verify the sidebar navigation appears
+- [ ] Switch the browser / OS to light mode → confirm the app switches to a light colour scheme automatically (and back to dark when reverted)
 - [ ] Navigate to **Dashboards → Trunks → Activity** — confirm live data appears
 - [ ] Navigate to **Dashboards → Trunks → History** — confirm the chart loads (may say "No data" initially)
 - [ ] Navigate to **Dashboards → Agent Copilot → Agent Checklists**:
