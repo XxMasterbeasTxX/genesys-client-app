@@ -17,18 +17,17 @@
     <p class="sub">This tab will close automatically.</p>
   </div>
   <script>
-    // Read file data from localStorage (written by the iframe app)
+    // Read file data from the URL hash fragment.
+    // Format: #<encodedFileName>|<base64data>
     try {
-      const b64 = localStorage.getItem("exportData");
-      const fileName = localStorage.getItem("exportFileName") || "export.xlsx";
-
-      // Clean up immediately
-      localStorage.removeItem("exportData");
-      localStorage.removeItem("exportFileName");
-
-      if (!b64) {
+      const hash = location.hash.substring(1); // strip leading #
+      const sep = hash.indexOf("|");
+      if (!hash || sep < 0) {
         document.getElementById("msg").textContent = "No export data found. Please try again.";
       } else {
+        const fileName = decodeURIComponent(hash.substring(0, sep));
+        const b64 = hash.substring(sep + 1);
+
         // Decode base64 → Uint8Array
         const raw = atob(b64);
         const bytes = new Uint8Array(raw.length);
@@ -44,6 +43,8 @@
         a.click();
 
         document.getElementById("msg").textContent = "Download started: " + fileName;
+        // Clear the hash so the data isn't visible in browser history
+        history.replaceState(null, "", location.pathname);
         setTimeout(() => { URL.revokeObjectURL(url); window.close(); }, 3000);
       }
     } catch (err) {

@@ -807,35 +807,25 @@ export async function render({ route, me, api }) {
       ];
       XLSX.utils.book_append_sheet(wb, ws2, "Checklist Items");
 
-      // ── Download via localStorage + helper page ─────────────
+      // ── Download via URL-hash + helper page ─────────────────
       // The app runs inside a cross-origin Genesys Cloud iframe where
-      // all download mechanisms (<a download>, showSaveFilePicker,
-      // postMessage to popup) are blocked. Solution: write the file
-      // as base64 into localStorage (shared with same-origin tabs),
-      // then open download.html in a new top-level tab which reads
-      // it and triggers a normal <a download> click.
+      // downloads, showSaveFilePicker, postMessage, and localStorage
+      // are all blocked or partitioned. Solution: encode the file as
+      // base64 in the URL hash of download.html. The hash fragment
+      // never leaves the browser and Chrome supports ~2 MB URLs.
       const today = new Date().toISOString().slice(0, 10);
       const fileName = `Agent_Checklists_${today}.xlsx`;
       const b64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
 
-      try {
-        localStorage.setItem("exportFileName", fileName);
-        localStorage.setItem("exportData", b64);
-      } catch (storageErr) {
-        statusEl.textContent = "⚠ Export data too large for browser storage.";
-        console.error("[Export] localStorage write failed:", storageErr);
-        return;
-      }
+      const helperUrl = new URL("download.html", document.baseURI);
+      helperUrl.hash = encodeURIComponent(fileName) + "|" + b64;
 
-      const helperUrl = new URL("download.html", document.baseURI).href;
-      const popup = window.open(helperUrl, "_blank");
+      const popup = window.open(helperUrl.href, "_blank");
       if (!popup) {
-        localStorage.removeItem("exportFileName");
-        localStorage.removeItem("exportData");
         statusEl.textContent = "⚠ Pop-up blocked. Please allow pop-ups for this site and try again.";
         return;
       }
-      console.log("[Export] opened download helper, data in localStorage:", fileName);
+      console.log("[Export] opened download helper with hash data:", fileName, "(b64 length:", b64.length, ")");
     } catch (err) {
       console.error("Export failed:", err);
       statusEl.textContent = `⚠ Export failed: ${err.message}`;
