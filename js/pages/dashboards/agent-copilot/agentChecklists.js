@@ -287,12 +287,12 @@ export async function render({ route, me, api }) {
   drillPanel.className = "checklist-drilldown";
   drillPanel.hidden = true;
 
-  // ── Content area: table on left, chart on right ────────
-  const contentArea = document.createElement("div");
-  contentArea.className = "checklist-content-area";
-  contentArea.append(tableWrap, chartWrap);
+  // ── Top area: filters on left, chart on right ─────────
+  const topArea = document.createElement("div");
+  topArea.className = "checklist-top-area";
+  topArea.append(filterBar, chartWrap);
 
-  root.append(header, filterBar, statusBar, statusEl, contentArea, drillPanel);
+  root.append(header, topArea, statusBar, statusEl, tableWrap, drillPanel);
 
   // ── Preset highlighting ────────────────────────────────
   function setActivePreset(days) {

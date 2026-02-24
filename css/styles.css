@@ -790,16 +790,15 @@ body {
   min-height: 20px;
 }
 
-/* ── Content area (table + chart side-by-side) ───────────── */
-.checklist-content-area {
+/* ── Top area (filters + chart side-by-side) ─────────────── */
+.checklist-top-area {
   display: flex;
   gap: 16px;
   align-items: flex-start;
 }
-.checklist-content-area .checklist-table-wrap {
+.checklist-top-area .checklist-filters {
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
 }
 .checklist-chart-wrap {
   flex: 0 0 220px;
