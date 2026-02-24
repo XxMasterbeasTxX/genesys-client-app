@@ -116,6 +116,24 @@ export function createApiClient(getAccessToken) {
     /** Fetch a single queue by ID (for name resolution). */
     getQueue: (queueId) => request(`/api/v2/routing/queues/${queueId}`),
 
+    /** Fetch ALL members of a queue (auto-paginates). */
+    getQueueMembers: async (queueId) => {
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+      while (all.length < total) {
+        const qs = new URLSearchParams({ pageNumber: page, pageSize: 100 });
+        const res = await request(
+          `/api/v2/routing/queues/${queueId}/members?${qs}`,
+        );
+        total = res.total ?? res.entities?.length ?? 0;
+        if (res.entities) all.push(...res.entities);
+        if (!res.entities?.length) break;
+        page++;
+      }
+      return all;
+    },
+
     // ── Analytics ───────────────────────────────────────────────
     /** POST conversation detail query (returns { conversations, totalHits }). */
     queryConversationDetails: (body) =>

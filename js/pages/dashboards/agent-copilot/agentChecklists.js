@@ -127,18 +127,43 @@ export async function render({ route, me, api }) {
   const filterBar = document.createElement("div");
   filterBar.className = "checklist-filters";
 
-  // Copilot multi-select
+  // Copilot multi-select (with label wrapper)
+  const copilotWrap = document.createElement("div");
+  copilotWrap.className = "checklist-filter-group";
+  const copilotLabel = document.createElement("label");
+  copilotLabel.className = "checklist-filter-label";
+  copilotLabel.textContent = "Agent Copilots";
   const copilotMs = createMultiSelect({
     placeholder: "Select copilot(s)…",
     onChange: onCopilotSelectionChanged,
   });
+  copilotWrap.append(copilotLabel, copilotMs.el);
 
-  // Queue multi-select (cascaded from copilot)
+  // Queue multi-select (cascaded from copilot, with label)
+  const queueWrap = document.createElement("div");
+  queueWrap.className = "checklist-filter-group";
+  const queueLabel = document.createElement("label");
+  queueLabel.className = "checklist-filter-label";
+  queueLabel.textContent = "Queues";
   const queueMs = createMultiSelect({
     placeholder: "Select queue(s)…",
-    onChange: () => {},
+    onChange: onQueueSelectionChanged,
   });
   queueMs.setEnabled(false);
+  queueWrap.append(queueLabel, queueMs.el);
+
+  // Agent multi-select (cascaded from queue, with label)
+  const agentWrap = document.createElement("div");
+  agentWrap.className = "checklist-filter-group";
+  const agentLabel = document.createElement("label");
+  agentLabel.className = "checklist-filter-label";
+  agentLabel.textContent = "Agents";
+  const agentMs = createMultiSelect({
+    placeholder: "Select agent(s)…",
+    onChange: () => {},
+  });
+  agentMs.setEnabled(false);
+  agentWrap.append(agentLabel, agentMs.el);
 
   // Period toolbar
   const periodWrap = document.createElement("div");
@@ -191,7 +216,7 @@ export async function render({ route, me, api }) {
     }
   });
 
-  filterBar.append(copilotMs.el, queueMs.el, periodWrap, searchBtn);
+  filterBar.append(copilotWrap, queueWrap, agentWrap, periodWrap, searchBtn);
 
   // ── Status filter bar ──────────────────────────────────
   const statusBar = document.createElement("div");
@@ -263,6 +288,8 @@ export async function render({ route, me, api }) {
   async function onCopilotSelectionChanged(selectedIds) {
     queueMs.setEnabled(false);
     queueMs.setItems([]);
+    agentMs.setEnabled(false);
+    agentMs.setItems([]);
 
     if (!selectedIds.size) return;
 
@@ -316,10 +343,52 @@ export async function render({ route, me, api }) {
     return ids.map((id) => ({ id, label: queueNameCache.get(id) ?? id }));
   }
 
+  // ── Queue selection changed → cascade agents ───────────
+  async function onQueueSelectionChanged(selectedQueueIds) {
+    agentMs.setEnabled(false);
+    agentMs.setItems([]);
+
+    if (!selectedQueueIds.size) return;
+
+    try {
+      const results = await Promise.all(
+        [...selectedQueueIds].map((id) => api.getQueueMembers(id)),
+      );
+
+      // Collect unique agents across all selected queues
+      const agentMap = new Map();
+      for (const members of results) {
+        for (const m of members) {
+          const userId = m.id ?? m.user?.id;
+          const userName = m.name ?? m.user?.name ?? userId;
+          if (userId) {
+            agentMap.set(userId, userName);
+            userNameCache.set(userId, userName);
+          }
+        }
+      }
+
+      if (!agentMap.size) {
+        statusEl.textContent = "No agents found in the selected queue(s).";
+        return;
+      }
+
+      const sorted = [...agentMap.entries()]
+        .map(([id, label]) => ({ id, label }))
+        .sort((a, b) => a.label.localeCompare(b.label));
+      agentMs.setItems(sorted);
+      agentMs.setEnabled(true);
+    } catch (err) {
+      console.error("Failed to load queue members:", err);
+      statusEl.textContent = `Error loading agents: ${err.message}`;
+    }
+  }
+
   // ── Search: query analytics ────────────────────────────
   async function doSearch(from, to) {
     const copilotIds = copilotMs.getSelected();
     const queueIds = queueMs.getSelected();
+    const agentIds = agentMs.getSelected();
 
     if (!copilotIds.size) {
       statusEl.textContent = "Please select at least one copilot.";
@@ -349,14 +418,27 @@ export async function render({ route, me, api }) {
       value: id,
     }));
 
+    const segmentFilters = [
+      { type: "or", predicates: copilotPredicates },
+      { type: "or", predicates: queuePredicates },
+    ];
+
+    // Optional agent filter
+    if (agentIds.size) {
+      segmentFilters.push({
+        type: "or",
+        predicates: [...agentIds].map((id) => ({
+          dimension: "userId",
+          value: id,
+        })),
+      });
+    }
+
     const body = {
       interval,
       order: "desc",
       orderBy: "conversationStart",
-      segmentFilters: [
-        { type: "or", predicates: copilotPredicates },
-        { type: "or", predicates: queuePredicates },
-      ],
+      segmentFilters,
       paging: { pageSize: QUERY_PAGE_SIZE, pageNumber: 1 },
     };
 
@@ -448,7 +530,12 @@ export async function render({ route, me, api }) {
     for (const row of rows) {
       const info = enriched.get(row.dataset.convId);
       if (statusFilter === "all") {
-        row.hidden = false;
+        // "All" shows only interactions that have checklist data
+        if (!info) {
+          row.hidden = false; // still loading — keep visible
+        } else {
+          row.hidden = !info.checklists?.length;
+        }
         continue;
       }
       // Not yet enriched — hide while filtering
