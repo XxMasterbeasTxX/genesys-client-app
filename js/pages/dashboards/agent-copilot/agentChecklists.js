@@ -465,8 +465,22 @@ export async function render({ route, me, api }) {
     };
 
     try {
-      const res = await api.queryConversationDetails(body);
-      conversations = res?.conversations ?? [];
+      // Auto-paginate to collect ALL matching conversations
+      let page = 1;
+      for (;;) {
+        body.paging.pageNumber = page;
+        statusEl.textContent = page === 1
+          ? "Loading…"
+          : `Loading page ${page}…`;
+
+        const res = await api.queryConversationDetails(body);
+        const batch = res?.conversations ?? [];
+        conversations.push(...batch);
+
+        // Stop when we received fewer than a full page or no results
+        if (batch.length < QUERY_PAGE_SIZE) break;
+        page++;
+      }
 
       if (!conversations.length) {
         statusEl.textContent =
