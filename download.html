@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Downloading…</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0;
+           display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    .box { text-align: center; }
+    .box p { font-size: 1.1rem; }
+    .box .sub { color: #888; font-size: 0.85rem; margin-top: 0.5rem; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <p id="msg">Preparing your download…</p>
+    <p class="sub">This tab will close automatically.</p>
+  </div>
+  <script>
+    // This page receives file data from the parent iframe via postMessage.
+    window.addEventListener("message", (e) => {
+      try {
+        const { type, arrayBuffer, fileName, mime } = e.data || {};
+        if (type !== "download-file") return;
+
+        const blob = new Blob([new Uint8Array(arrayBuffer)], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+
+        document.getElementById("msg").textContent = "Download started: " + fileName;
+        setTimeout(() => { URL.revokeObjectURL(url); window.close(); }, 3000);
+      } catch (err) {
+        document.getElementById("msg").textContent = "Download failed: " + err.message;
+      }
+    });
+
+    // Let the opener know we're ready
+    if (window.opener) {
+      window.opener.postMessage({ type: "download-ready" }, "*");
+    }
+  </script>
+</body>
+</html>

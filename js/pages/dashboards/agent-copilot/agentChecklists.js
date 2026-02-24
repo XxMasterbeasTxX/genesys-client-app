@@ -715,7 +715,7 @@ export async function render({ route, me, api }) {
   }
 
   // ── Export to Excel (two-sheet XLSX) ───────────────────
-  async function exportToExcel() {
+  function exportToExcel() {
     console.log("[Export] clicked – XLSX available:", typeof XLSX !== "undefined");
     console.log("[Export] conversations:", conversations.length, "enriched:", enriched.size);
     try {
@@ -807,43 +807,36 @@ export async function render({ route, me, api }) {
       ];
       XLSX.utils.book_append_sheet(wb, ws2, "Checklist Items");
 
-      // ── Download via native Save-As dialog ─────────────────
+      // ── Download via helper page (cross-origin iframe safe) ─
       const today = new Date().toISOString().slice(0, 10);
       const fileName = `Agent_Checklists_${today}.xlsx`;
       const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
       const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-      const blob = new Blob([new Uint8Array(wbOut)], { type: mime });
 
-      if (typeof window.showSaveFilePicker === "function") {
-        // File System Access API – opens native Save As dialog
-        try {
-          const handle = await window.showSaveFilePicker({
-            suggestedName: fileName,
-            types: [{
-              description: "Excel Workbook",
-              accept: { [mime]: [".xlsx"] },
-            }],
-          });
-          const writable = await handle.createWritable();
-          await writable.write(blob);
-          await writable.close();
-          console.log("[Export] saved via File System Access API:", fileName);
-        } catch (abortErr) {
-          // User cancelled the dialog — not an error
-          if (abortErr.name !== "AbortError") throw abortErr;
-          console.log("[Export] user cancelled Save dialog");
-        }
-      } else {
-        // Fallback for browsers without File System Access API
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        console.log("[Export] fallback <a> download:", fileName);
-        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+      // Open download.html at our own origin in a new top-level tab.
+      // It listens for a postMessage with the file bytes and triggers
+      // a real <a download> click — which works because it's not in an iframe.
+      const helperUrl = new URL("download.html", document.baseURI).href;
+      const popup = window.open(helperUrl, "_blank");
+      if (!popup) {
+        statusEl.textContent = "⚠ Pop-up blocked. Please allow pop-ups for this site and try again.";
+        return;
       }
+
+      // Wait for the helper page to signal it's ready, then send the data
+      const onMessage = (evt) => {
+        if (evt.data?.type !== "download-ready") return;
+        window.removeEventListener("message", onMessage);
+        popup.postMessage(
+          { type: "download-file", arrayBuffer: Array.from(new Uint8Array(wbOut)), fileName, mime },
+          "*",
+        );
+        console.log("[Export] sent file data to download helper:", fileName);
+      };
+      window.addEventListener("message", onMessage);
+
+      // Safety timeout – clean up listener if helper never responds
+      setTimeout(() => window.removeEventListener("message", onMessage), 15_000);
     } catch (err) {
       console.error("Export failed:", err);
       statusEl.textContent = `⚠ Export failed: ${err.message}`;
