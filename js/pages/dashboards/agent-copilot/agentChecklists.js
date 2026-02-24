@@ -507,12 +507,16 @@ export async function render({ route, me, api }) {
   async function enrichOne(conv) {
     const convId = conv.conversationId;
     try {
-      // Step 1: Get full conversation to find agent communicationId
+      // Step 1: Get full conversation to find agent communicationId(s)
       const fullConv = await api.getConversation(convId);
-      const agentPart = (fullConv.participants ?? []).find(
+      const agentParts = (fullConv.participants ?? []).filter(
         (p) => p.purpose === "agent",
       );
-      if (!agentPart?.communications?.length) {
+      // Collect all communication IDs across every agent participant
+      const commIds = agentParts.flatMap(
+        (p) => (p.communications ?? []).map((c) => c.id),
+      );
+      if (!commIds.length) {
         enriched.set(convId, {
           checklists: [],
           communicationId: null,
@@ -522,19 +526,44 @@ export async function render({ route, me, api }) {
         return;
       }
 
-      const commId = agentPart.communications[0].id;
+      // Step 2: Try each communication until we find checklists
+      for (const commId of commIds) {
+        try {
+          const checklistRes = await api.getConversationChecklists(convId, commId);
+          // Normalise response – API may return { entities: [...] }, an array, or a single object
+          let list;
+          if (Array.isArray(checklistRes)) {
+            list = checklistRes;
+          } else if (Array.isArray(checklistRes?.entities)) {
+            list = checklistRes.entities;
+          } else if (checklistRes && typeof checklistRes === "object" && checklistRes.id) {
+            // Single checklist object returned
+            list = [checklistRes];
+          } else {
+            list = [];
+          }
 
-      // Step 2: Fetch checklists for that communication
-      const checklistRes = await api.getConversationChecklists(convId, commId);
-      const raw = checklistRes?.entities ?? checklistRes ?? [];
-      const list = Array.isArray(raw) ? raw : [];
+          if (list.length) {
+            const completion = checklistCompletion(list[0]);
+            enriched.set(convId, { checklists: list, communicationId: commId, completion });
+            updateRowEnrichment(convId);
+            return;
+          }
+        } catch (innerErr) {
+          // 404 means no checklists for this communication – try next
+          console.debug(`[Checklists] No data on comm ${commId} for ${convId}:`, innerErr.message ?? innerErr);
+        }
+      }
 
-      // Determine overall completion (use first checklist)
-      const completion = list.length ? checklistCompletion(list[0]) : null;
-
-      enriched.set(convId, { checklists: list, communicationId: commId, completion });
+      // None of the communications had checklists
+      enriched.set(convId, {
+        checklists: [],
+        communicationId: commIds[0],
+        completion: null,
+      });
       updateRowEnrichment(convId);
-    } catch {
+    } catch (err) {
+      console.error(`[Checklists] enrichOne failed for ${convId}:`, err);
       enriched.set(convId, {
         checklists: [],
         communicationId: null,
