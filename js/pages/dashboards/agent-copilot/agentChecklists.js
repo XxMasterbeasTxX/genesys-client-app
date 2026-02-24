@@ -807,36 +807,35 @@ export async function render({ route, me, api }) {
       ];
       XLSX.utils.book_append_sheet(wb, ws2, "Checklist Items");
 
-      // ── Download via helper page (cross-origin iframe safe) ─
+      // ── Download via localStorage + helper page ─────────────
+      // The app runs inside a cross-origin Genesys Cloud iframe where
+      // all download mechanisms (<a download>, showSaveFilePicker,
+      // postMessage to popup) are blocked. Solution: write the file
+      // as base64 into localStorage (shared with same-origin tabs),
+      // then open download.html in a new top-level tab which reads
+      // it and triggers a normal <a download> click.
       const today = new Date().toISOString().slice(0, 10);
       const fileName = `Agent_Checklists_${today}.xlsx`;
-      const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-      const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      const b64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
 
-      // Open download.html at our own origin in a new top-level tab.
-      // It listens for a postMessage with the file bytes and triggers
-      // a real <a download> click — which works because it's not in an iframe.
-      const helperUrl = new URL("download.html", document.baseURI).href;
-      const popup = window.open(helperUrl, "_blank");
-      if (!popup) {
-        statusEl.textContent = "⚠ Pop-up blocked. Please allow pop-ups for this site and try again.";
+      try {
+        localStorage.setItem("exportFileName", fileName);
+        localStorage.setItem("exportData", b64);
+      } catch (storageErr) {
+        statusEl.textContent = "⚠ Export data too large for browser storage.";
+        console.error("[Export] localStorage write failed:", storageErr);
         return;
       }
 
-      // Wait for the helper page to signal it's ready, then send the data
-      const onMessage = (evt) => {
-        if (evt.data?.type !== "download-ready") return;
-        window.removeEventListener("message", onMessage);
-        popup.postMessage(
-          { type: "download-file", arrayBuffer: Array.from(new Uint8Array(wbOut)), fileName, mime },
-          "*",
-        );
-        console.log("[Export] sent file data to download helper:", fileName);
-      };
-      window.addEventListener("message", onMessage);
-
-      // Safety timeout – clean up listener if helper never responds
-      setTimeout(() => window.removeEventListener("message", onMessage), 15_000);
+      const helperUrl = new URL("download.html", document.baseURI).href;
+      const popup = window.open(helperUrl, "_blank");
+      if (!popup) {
+        localStorage.removeItem("exportFileName");
+        localStorage.removeItem("exportData");
+        statusEl.textContent = "⚠ Pop-up blocked. Please allow pop-ups for this site and try again.";
+        return;
+      }
+      console.log("[Export] opened download helper, data in localStorage:", fileName);
     } catch (err) {
       console.error("Export failed:", err);
       statusEl.textContent = `⚠ Export failed: ${err.message}`;

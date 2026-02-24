@@ -17,13 +17,25 @@
     <p class="sub">This tab will close automatically.</p>
   </div>
   <script>
-    // This page receives file data from the parent iframe via postMessage.
-    window.addEventListener("message", (e) => {
-      try {
-        const { type, arrayBuffer, fileName, mime } = e.data || {};
-        if (type !== "download-file") return;
+    // Read file data from localStorage (written by the iframe app)
+    try {
+      const b64 = localStorage.getItem("exportData");
+      const fileName = localStorage.getItem("exportFileName") || "export.xlsx";
 
-        const blob = new Blob([new Uint8Array(arrayBuffer)], { type: mime });
+      // Clean up immediately
+      localStorage.removeItem("exportData");
+      localStorage.removeItem("exportFileName");
+
+      if (!b64) {
+        document.getElementById("msg").textContent = "No export data found. Please try again.";
+      } else {
+        // Decode base64 → Uint8Array
+        const raw = atob(b64);
+        const bytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+
+        const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        const blob = new Blob([bytes], { type: mime });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -33,14 +45,10 @@
 
         document.getElementById("msg").textContent = "Download started: " + fileName;
         setTimeout(() => { URL.revokeObjectURL(url); window.close(); }, 3000);
-      } catch (err) {
-        document.getElementById("msg").textContent = "Download failed: " + err.message;
       }
-    });
-
-    // Let the opener know we're ready
-    if (window.opener) {
-      window.opener.postMessage({ type: "download-ready" }, "*");
+    } catch (err) {
+      document.getElementById("msg").textContent = "Download failed: " + err.message;
+      console.error("Download helper error:", err);
     }
   </script>
 </body>
