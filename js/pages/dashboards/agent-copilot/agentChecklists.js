@@ -807,41 +807,34 @@ export async function render({ route, me, api }) {
       ];
       XLSX.utils.book_append_sheet(wb, ws2, "Checklist Items");
 
-      // ── Download (iframe-safe) ───────────────────────────
+      // ── Download (iframe-safe via data URI) ────────────────
       const today = new Date().toISOString().slice(0, 10);
       const fileName = `Agent_Checklists_${today}.xlsx`;
-      const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-      const blob = new Blob([wbOut], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = URL.createObjectURL(blob);
+      const b64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
+      const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-      // Try 1: open in new tab (works even inside sandboxed iframes)
-      const win = window.open(url, "_blank");
-      if (win) {
-        console.log("[Export] opened blob in new tab – browser will download:", fileName);
-        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      // Open a small helper window that triggers the download
+      const popup = window.open("", "_blank");
+      if (popup) {
+        popup.document.write(
+          `<!DOCTYPE html><html><head><title>Downloading…</title></head><body>` +
+          `<p>Your download should start automatically. You can close this tab.</p>` +
+          `<a id="dl" href="data:${mime};base64,${b64}" download="${fileName}">` +
+          `Click here if download does not start</a>` +
+          `<script>document.getElementById("dl").click();<\/script>` +
+          `</body></html>`,
+        );
+        popup.document.close();
+        console.log("[Export] popup download triggered:", fileName);
       } else {
-        // Try 2: <a> click on top-level document if same-origin
-        try {
-          const topDoc = window.top.document;
-          const a = topDoc.createElement("a");
-          a.href = url;
-          a.download = fileName;
-          topDoc.body.appendChild(a);
-          a.click();
-          console.log("[Export] download via top document:", fileName);
-          setTimeout(() => { topDoc.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
-        } catch {
-          // Try 3: fallback to current document <a> click
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          console.log("[Export] download via local <a>:", fileName);
-          setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
-        }
+        // Popup blocked – fall back to data URI in current frame
+        const a = document.createElement("a");
+        a.href = `data:${mime};base64,${b64}`;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        console.log("[Export] local <a> data-URI download:", fileName);
+        setTimeout(() => document.body.removeChild(a), 500);
       }
     } catch (err) {
       console.error("Export failed:", err);
