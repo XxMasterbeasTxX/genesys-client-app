@@ -716,9 +716,12 @@ export async function render({ route, me, api }) {
 
   // ── Export to Excel (two-sheet XLSX) ───────────────────
   function exportToExcel() {
+    console.log("[Export] clicked – XLSX available:", typeof XLSX !== "undefined");
+    console.log("[Export] conversations:", conversations.length, "enriched:", enriched.size);
     try {
       if (typeof XLSX === "undefined") {
         statusEl.textContent = "⚠ Excel library not loaded. Please reload the page.";
+        console.error("[Export] XLSX global is undefined – library did not load");
         return;
       }
 
@@ -748,6 +751,7 @@ export async function render({ route, me, api }) {
         });
       }
 
+      console.log("[Export] interactionRows:", interactionRows.length);
       if (!interactionRows.length) {
         statusEl.textContent = "⚠ No checklist data to export.";
         return;
@@ -816,6 +820,7 @@ export async function render({ route, me, api }) {
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
+      console.log("[Export] download triggered:", fileName);
       setTimeout(() => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
