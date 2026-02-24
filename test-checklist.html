@@ -19,6 +19,14 @@
 <body>
   <h1>🔍 Checklist API Diagnostic</h1>
   <p>Conversation ID: <strong>67773d2f-8cad-4103-a1da-7cd66e1ff31b</strong></p>
+  <p style="color:#dcdcaa;">
+    Paste your access token below. To get it: in the <strong>main app</strong> (inside Genesys Cloud), 
+    open DevTools console (F12) and run:<br>
+    <code style="background:#252526;padding:2px 6px;">copy(sessionStorage.getItem('gc_access_token'))</code><br>
+    Then paste here (Ctrl+V):
+  </p>
+  <input id="tokenInput" type="text" placeholder="Paste access token here…"
+    style="width:100%;padding:8px;font-family:monospace;font-size:12px;background:#252526;color:#d4d4d4;border:1px solid #555;">
   <p>
     <button onclick="run()">▶ Run Full Diagnostic</button>
     <button onclick="document.getElementById('log').innerHTML=''">Clear</button>
@@ -29,8 +37,10 @@
     const CONV_ID = "67773d2f-8cad-4103-a1da-7cd66e1ff31b";
     const API_BASE = "https://api.mypurecloud.de";
 
-    // Grab the access token from sessionStorage (same key our app uses)
     function getToken() {
+      // Try user-pasted token first, then sessionStorage as fallback
+      const pasted = document.getElementById("tokenInput").value.trim();
+      if (pasted) return pasted;
       return sessionStorage.getItem("gc_access_token");
     }
 
