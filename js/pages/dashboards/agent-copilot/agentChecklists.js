@@ -123,7 +123,7 @@ export async function render({ route, me, api }) {
   const root = document.createElement("div");
   root.className = "checklist-view";
 
-  // Header
+  // Header (title + export button)
   const header = document.createElement("div");
   header.className = "checklist-header";
   header.innerHTML = `<h2>Agent Checklists</h2>`;
@@ -261,6 +261,7 @@ export async function render({ route, me, api }) {
   exportBtn.textContent = "⬇ Export Excel";
   exportBtn.hidden = true;
   exportBtn.addEventListener("click", exportToExcel);
+  header.append(exportBtn);
 
   function syncStatusButtons() {
     for (const btn of statusBtns) {
@@ -294,15 +295,10 @@ export async function render({ route, me, api }) {
   drillPanel.className = "checklist-drilldown";
   drillPanel.hidden = true;
 
-  // ── Right column: chart + export button ────────────────
-  const rightCol = document.createElement("div");
-  rightCol.className = "checklist-right-col";
-  rightCol.append(chartWrap, exportBtn);
-
-  // ── Top area: filters on left, chart+export on right ───
+  // ── Top area: filters on left, chart in center ────────
   const topArea = document.createElement("div");
   topArea.className = "checklist-top-area";
-  topArea.append(filterBar, rightCol);
+  topArea.append(filterBar, chartWrap);
 
   root.append(header, topArea, statusEl, tableWrap, drillPanel);
 
