@@ -229,11 +229,9 @@ export async function render({ route, me, api }) {
   filterRow2.className = "checklist-filter-row";
   filterRow2.append(periodWrap, searchBtn);
 
-  filterBar.append(filterRow1, filterRow2);
-
-  // ── Status filter bar ──────────────────────────────────
+  // ── Status filter row (row 3 inside filterBar) ────────
   const statusBar = document.createElement("div");
-  statusBar.className = "checklist-status-bar";
+  statusBar.className = "checklist-filter-row checklist-status-bar";
 
   const statusBtns = [
     { val: STATUS_FILTER.ALL, label: "All" },
@@ -254,6 +252,8 @@ export async function render({ route, me, api }) {
   });
   statusBar.append(...statusBtns);
 
+  filterBar.append(filterRow1, filterRow2, statusBar);
+
   // Export Excel button (hidden until enrichment completes)
   const exportBtn = document.createElement("button");
   exportBtn.type = "button";
@@ -261,7 +261,6 @@ export async function render({ route, me, api }) {
   exportBtn.textContent = "⬇ Export Excel";
   exportBtn.hidden = true;
   exportBtn.addEventListener("click", exportToExcel);
-  statusBar.append(exportBtn);
 
   function syncStatusButtons() {
     for (const btn of statusBtns) {
@@ -295,12 +294,17 @@ export async function render({ route, me, api }) {
   drillPanel.className = "checklist-drilldown";
   drillPanel.hidden = true;
 
-  // ── Top area: filters on left, chart on right ─────────
+  // ── Right column: chart + export button ────────────────
+  const rightCol = document.createElement("div");
+  rightCol.className = "checklist-right-col";
+  rightCol.append(chartWrap, exportBtn);
+
+  // ── Top area: filters on left, chart+export on right ───
   const topArea = document.createElement("div");
   topArea.className = "checklist-top-area";
-  topArea.append(filterBar, chartWrap);
+  topArea.append(filterBar, rightCol);
 
-  root.append(header, topArea, statusBar, statusEl, tableWrap, drillPanel);
+  root.append(header, topArea, statusEl, tableWrap, drillPanel);
 
   // ── Preset highlighting ────────────────────────────────
   function setActivePreset(days) {
