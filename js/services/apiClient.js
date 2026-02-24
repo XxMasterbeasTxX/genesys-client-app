@@ -74,5 +74,65 @@ export function createApiClient(getAccessToken) {
         method: "PUT",
         body: topics.map((id) => ({ id })),
       }),
+
+    // ── Assistants / Copilot ────────────────────────────────────
+    /** Fetch ALL assistants with copilot config embedded (cursor-paginated). */
+    getAllAssistants: async () => {
+      const all = [];
+      let after = undefined;
+      for (;;) {
+        const qs = new URLSearchParams({ pageSize: 200, expand: "copilot" });
+        if (after) qs.set("after", after);
+        const res = await request(`/api/v2/assistants?${qs}`);
+        if (res.entities) all.push(...res.entities);
+        if (!res.nextUri) break;
+        const m = new URL(res.nextUri, CONFIG.apiBase).searchParams.get("after");
+        if (!m) break;
+        after = m;
+      }
+      return all;
+    },
+
+    /** Fetch queue IDs assigned to an assistant (cursor-paginated). */
+    getAssistantQueues: async (assistantId) => {
+      const all = [];
+      let after = undefined;
+      for (;;) {
+        const qs = new URLSearchParams({ pageSize: 200 });
+        if (after) qs.set("after", after);
+        const res = await request(
+          `/api/v2/assistants/${assistantId}/queues?${qs}`,
+        );
+        if (res.entities) all.push(...res.entities);
+        if (!res.nextUri) break;
+        const m = new URL(res.nextUri, CONFIG.apiBase).searchParams.get("after");
+        if (!m) break;
+        after = m;
+      }
+      return all; // [{ id, mediaTypes, … }]
+    },
+
+    // ── Routing ─────────────────────────────────────────────────
+    /** Fetch a single queue by ID (for name resolution). */
+    getQueue: (queueId) => request(`/api/v2/routing/queues/${queueId}`),
+
+    // ── Analytics ───────────────────────────────────────────────
+    /** POST conversation detail query (returns { conversations, totalHits }). */
+    queryConversationDetails: (body) =>
+      request("/api/v2/analytics/conversations/details/query", {
+        method: "POST",
+        body,
+      }),
+
+    // ── Conversations + Checklists ──────────────────────────────
+    /** Fetch a single conversation (participants, communications). */
+    getConversation: (conversationId) =>
+      request(`/api/v2/conversations/${conversationId}`),
+
+    /** Fetch checklists for a conversation communication. */
+    getConversationChecklists: (conversationId, communicationId) =>
+      request(
+        `/api/v2/conversations/${conversationId}/communications/${communicationId}/agentchecklists`,
+      ),
   };
 }

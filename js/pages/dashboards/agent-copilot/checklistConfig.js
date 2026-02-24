@@ -1,0 +1,42 @@
+/**
+ * Agent Copilot › Checklists — feature-level configuration.
+ *
+ * All customer-tunable settings for the checklists view live here.
+ */
+
+// ── Date range presets ────────────────────────────────────
+/** Default range shown when the page loads. */
+export const DEFAULT_RANGE_DAYS = 7;
+
+/** Preset buttons in the period toolbar. */
+export const RANGE_PRESETS = [
+  { label: "Today", days: 0 },
+  { label: "7 days", days: 7 },
+  { label: "30 days", days: 30 },
+];
+
+// ── Analytics query ───────────────────────────────────────
+/** Max conversations per page returned by the detail query. */
+export const QUERY_PAGE_SIZE = 100;
+
+// ── Checklist enrichment ──────────────────────────────────
+/** Number of conversations to enrich in parallel per batch. */
+export const ENRICHMENT_BATCH = 10;
+
+// ── Date / time formats (Intl.DateTimeFormat options) ─────
+export const TABLE_DATE_FORMAT = {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+};
+
+export const TOOLTIP_DATE_FORMAT = {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+};
