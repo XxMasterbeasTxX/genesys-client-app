@@ -96,7 +96,10 @@ function extractMediaType(participant) {
 function checklistCompletion(checklistResponse) {
   const items = checklistResponse?.checklistItems ?? [];
   if (!items.length) return null;
-  const allTicked = items.every((it) => it.stateFromAgent === "Ticked");
+  // An item is ticked if either the agent or the AI model marked it
+  const allTicked = items.every(
+    (it) => it.stateFromAgent === "Ticked" || it.stateFromModel === "Ticked",
+  );
   return allTicked ? "complete" : "incomplete";
 }
 
@@ -512,9 +515,11 @@ export async function render({ route, me, api }) {
       const agentParts = (fullConv.participants ?? []).filter(
         (p) => p.purpose === "agent",
       );
-      // Collect all communication IDs across every agent participant
-      const commIds = agentParts.flatMap(
-        (p) => (p.communications ?? []).map((c) => c.id),
+      // Communications live under media-specific keys (messages, calls, chats, etc.)
+      // NOT under a generic "communications" key.
+      const MEDIA_KEYS = ["messages", "calls", "chats", "callbacks", "emails", "socialExpressions", "videos"];
+      const commIds = agentParts.flatMap((p) =>
+        MEDIA_KEYS.flatMap((k) => (p[k] ?? []).map((c) => c.id)),
       );
       if (!commIds.length) {
         enriched.set(convId, {
@@ -668,16 +673,17 @@ export async function render({ route, me, api }) {
       for (const item of cl.checklistItems ?? []) {
         const agentTicked = item.stateFromAgent === "Ticked";
         const modelTicked = item.stateFromModel === "Ticked";
+        const ticked = agentTicked || modelTicked;
 
         const li = document.createElement("li");
         li.className =
           "checklist-drilldown__item " +
-          (agentTicked
+          (ticked
             ? "checklist-drilldown__item--ticked"
             : "checklist-drilldown__item--unticked");
 
         li.innerHTML = `
-          <span class="checklist-drilldown__icon">${agentTicked ? "✅" : "❌"}</span>
+          <span class="checklist-drilldown__icon">${ticked ? "✅" : "❌"}</span>
           <span class="checklist-drilldown__item-name">${escapeHtml(item.name)}</span>
           ${item.important ? `<span class="checklist-drilldown__important" title="Important">⚡</span>` : ""}
           <span class="checklist-drilldown__ai" title="AI evaluation: ${modelTicked ? "Ticked" : "Unticked"}">
