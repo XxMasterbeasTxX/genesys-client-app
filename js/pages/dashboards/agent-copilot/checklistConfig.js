@@ -15,6 +15,9 @@ export const RANGE_PRESETS = [
   { label: "30 days", days: 30 },
 ];
 
+/** Maximum interval the Genesys analytics API allows (days). */
+export const MAX_INTERVAL_DAYS = 31;
+
 // ── Analytics query ───────────────────────────────────────
 /** Max conversations per page returned by the detail query. */
 export const QUERY_PAGE_SIZE = 100;

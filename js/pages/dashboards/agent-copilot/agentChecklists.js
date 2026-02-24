@@ -20,6 +20,7 @@ import { createMultiSelect } from "../../../components/multiSelect.js";
 import {
   DEFAULT_RANGE_DAYS,
   RANGE_PRESETS,
+  MAX_INTERVAL_DAYS,
   QUERY_PAGE_SIZE,
   ENRICHMENT_BATCH,
   TABLE_DATE_FORMAT,
@@ -396,6 +397,16 @@ export async function render({ route, me, api }) {
     }
     if (!queueIds.size) {
       statusEl.textContent = "Please select at least one queue.";
+      return;
+    }
+
+    // Validate interval does not exceed API limit
+    const intervalMs = to.getTime() - from.getTime();
+    const intervalDays = intervalMs / 86_400_000;
+    if (intervalDays > MAX_INTERVAL_DAYS) {
+      statusEl.textContent =
+        `The selected period spans ${Math.ceil(intervalDays)} days. ` +
+        `Maximum allowed is ${MAX_INTERVAL_DAYS} days.`;
       return;
     }
 
