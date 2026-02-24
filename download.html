@@ -1,26 +1,29 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Downloading…</title>
+  <title>Export Download</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0;
            display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
     .box { text-align: center; }
-    .box p { font-size: 1.1rem; }
-    .box .sub { color: #888; font-size: 0.85rem; margin-top: 0.5rem; }
+    .box p { font-size: 1.1rem; margin-bottom: 1.5rem; }
+    .box .sub { color: #888; font-size: 0.85rem; margin-top: 1rem; }
+    .dl-btn { display: inline-block; padding: 14px 32px; font-size: 1.1rem; font-weight: 600;
+              color: #fff; background: #22c55e; border: none; border-radius: 8px;
+              cursor: pointer; text-decoration: none; transition: background 0.2s; }
+    .dl-btn:hover { background: #16a34a; }
   </style>
 </head>
 <body>
   <div class="box">
-    <p id="msg">Preparing your download…</p>
-    <p class="sub">This tab will close automatically.</p>
+    <p id="msg">Your file is ready</p>
+    <a id="dlBtn" class="dl-btn" style="display:none"></a>
+    <p class="sub" id="sub"></p>
   </div>
   <script>
-    // Read file data from the URL hash fragment.
-    // Format: #<encodedFileName>|<base64data>
     try {
-      const hash = location.hash.substring(1); // strip leading #
+      const hash = location.hash.substring(1);
       const sep = hash.indexOf("|");
       if (!hash || sep < 0) {
         document.getElementById("msg").textContent = "No export data found. Please try again.";
@@ -28,24 +31,23 @@
         const fileName = decodeURIComponent(hash.substring(0, sep));
         const b64 = hash.substring(sep + 1);
 
-        // Decode base64 → Uint8Array
         const raw = atob(b64);
         const bytes = new Uint8Array(raw.length);
         for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-
         const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
         const blob = new Blob([bytes], { type: mime });
         const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
 
-        document.getElementById("msg").textContent = "Download started: " + fileName;
-        // Clear the hash so the data isn't visible in browser history
+        const btn = document.getElementById("dlBtn");
+        btn.href = url;
+        btn.download = fileName;
+        btn.textContent = "\u2B07 Save " + fileName;
+        btn.style.display = "inline-block";
+
+        document.getElementById("msg").textContent = "Click the button to save your file:";
+        document.getElementById("sub").textContent = "You can close this tab after downloading.";
+
         history.replaceState(null, "", location.pathname);
-        setTimeout(() => { URL.revokeObjectURL(url); window.close(); }, 3000);
       }
     } catch (err) {
       document.getElementById("msg").textContent = "Download failed: " + err.message;
