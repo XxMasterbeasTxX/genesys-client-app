@@ -296,6 +296,13 @@ export async function render({ route, me, api }) {
   chartWrap.append(chartCanvas);
   let chartInstance = null;
 
+  // Re-render chart when OS theme changes so colours update
+  const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+  themeMedia.addEventListener("change", () => {
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    updateChart();
+  });
+
   // ── Drill-down panel ───────────────────────────────────
   const drillPanel = document.createElement("div");
   drillPanel.className = "checklist-drilldown";
@@ -644,6 +651,12 @@ export async function render({ route, me, api }) {
     }
 
     const cc = CHART_CONFIG;
+    // Read theme-aware chart colours from CSS custom properties
+    const cs = getComputedStyle(document.documentElement);
+    const chartText  = cs.getPropertyValue("--chart-text").trim()  || cc.axisColor;
+    const chartGrid  = cs.getPropertyValue("--chart-grid").trim()  || cc.gridColor;
+    const chartTitle = cs.getPropertyValue("--chart-title").trim() || cc.titleColor;
+
     const data = {
       labels: [LABELS.chartLabelComplete, LABELS.chartLabelIncomplete],
       datasets: [{
@@ -664,24 +677,24 @@ export async function render({ route, me, api }) {
         title: {
           display: true,
           text: cc.title,
-          color: cc.titleColor,
+          color: chartTitle,
           font: { size: cc.titleFontSize, weight: "600" },
         },
       },
       scales: {
         x: {
-          ticks: { color: cc.axisColor, font: { size: cc.axisFontSize } },
+          ticks: { color: chartText, font: { size: cc.axisFontSize } },
           grid: { display: false },
         },
         y: {
           beginAtZero: true,
           ticks: {
-            color: cc.axisColor,
+            color: chartText,
             font: { size: cc.axisFontSize },
             stepSize: 1,
             precision: 0,
           },
-          grid: { color: cc.gridColor },
+          grid: { color: chartGrid },
         },
       },
     };

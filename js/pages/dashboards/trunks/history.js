@@ -62,6 +62,13 @@ export async function render() {
   let plotData = [];       // data currently shown in the chart
   let currentBucket = "raw";
 
+  // Re-render chart when OS theme changes so colours update
+  const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+  themeMedia.addEventListener("change", () => {
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    if (plotData.length) renderChart(plotData, currentBucket);
+  });
+
   // ── DOM skeleton ──────────────────────────────────────
   const root = document.createElement("div");
   root.className = "trunk-history";
@@ -293,6 +300,11 @@ export async function render() {
       });
     }
 
+    // Theme-aware chart metadata colours
+    const cs = getComputedStyle(document.documentElement);
+    const cText = cs.getPropertyValue("--chart-text").trim() || "#93a4b8";
+    const cGrid = cs.getPropertyValue("--chart-grid").trim() || "rgba(255,255,255,0.06)";
+
     if (chartInstance) {
       chartInstance.data.labels = labels;
       chartInstance.data.datasets = datasets;
@@ -310,7 +322,7 @@ export async function render() {
             legend: {
               display: !isRaw,
               position: "bottom",
-              labels: { color: "#93a4b8", boxWidth: 12 },
+              labels: { color: cText, boxWidth: 12 },
             },
             tooltip: {
               callbacks: {
@@ -331,14 +343,14 @@ export async function render() {
           },
           scales: {
             x: {
-              ticks: { color: "#93a4b8", maxTicksLimit: 14, maxRotation: 45 },
-              grid: { color: "rgba(255,255,255,0.06)" },
+              ticks: { color: cText, maxTicksLimit: 14, maxRotation: 45 },
+              grid: { color: cGrid },
             },
             y: {
               beginAtZero: true,
-              title: { display: true, text: "Concurrent Calls", color: "#93a4b8" },
-              ticks: { color: "#93a4b8", precision: 0 },
-              grid: { color: "rgba(255,255,255,0.06)" },
+              title: { display: true, text: "Concurrent Calls", color: cText },
+              ticks: { color: cText, precision: 0 },
+              grid: { color: cGrid },
             },
           },
         },

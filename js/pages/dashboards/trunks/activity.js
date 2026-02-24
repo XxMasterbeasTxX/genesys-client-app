@@ -73,6 +73,13 @@ export async function render({ route, me, api }) {
   let tabFlashTimer = null;      // tab title flash interval
   const originalTitle = document.title;
 
+  // Re-render chart when OS theme changes so colours update
+  const themeMedia = window.matchMedia("(prefers-color-scheme: dark)");
+  themeMedia.addEventListener("change", () => {
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+    if (chartVisible) renderChart();
+  });
+
   // ── Alert config loaded from backend ────────────────────
   let alertThreshold = DEFAULT_THRESHOLD;
   let alertCooldown = DEFAULT_COOLDOWN_MINUTES;
@@ -736,6 +743,11 @@ export async function render({ route, me, api }) {
       chartInstance.data.datasets = datasets;
       chartInstance.update("none");
     } else {
+      // Theme-aware chart metadata colours
+      const cs = getComputedStyle(document.documentElement);
+      const cText = cs.getPropertyValue("--chart-text").trim() || "#93a4b8";
+      const cGrid = cs.getPropertyValue("--chart-grid").trim() || "rgba(255,255,255,0.06)";
+
       chartInstance = new Chart(canvas, {
         type: "line",
         data: { labels, datasets },
@@ -745,17 +757,17 @@ export async function render({ route, me, api }) {
           animation: false,
           interaction: { mode: "index", intersect: false },
           plugins: {
-            legend: { position: "bottom", labels: { color: "#93a4b8", boxWidth: 12 } },
+            legend: { position: "bottom", labels: { color: cText, boxWidth: 12 } },
           },
           scales: {
             x: {
-              ticks: { color: "#93a4b8", maxTicksLimit: 12 },
-              grid: { color: "rgba(255,255,255,0.06)" },
+              ticks: { color: cText, maxTicksLimit: 12 },
+              grid: { color: cGrid },
             },
             y: {
               beginAtZero: true,
-              ticks: { color: "#93a4b8", precision: 0 },
-              grid: { color: "rgba(255,255,255,0.06)" },
+              ticks: { color: cText, precision: 0 },
+              grid: { color: cGrid },
             },
           },
         },

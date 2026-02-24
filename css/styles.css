@@ -9,6 +9,10 @@
   --radius: 14px;
   --pad: 14px;
   --nav-w: 240px;
+  /* Chart metadata colours (axis labels, grid lines, titles) */
+  --chart-text: #93a4b8;
+  --chart-grid: rgba(255,255,255,0.06);
+  --chart-title: #e0e0e0;
 }
 
 * { box-sizing: border-box; }
@@ -962,4 +966,209 @@ body {
   color: var(--muted);
   margin-top: 4px;
   padding-left: 32px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Light-mode overrides  (follows browser / OS preference)
+   ═══════════════════════════════════════════════════════════ */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f8fafc;
+    --panel: #ffffff;
+    --panel-2: #f1f5f9;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: rgba(0,0,0,0.10);
+    --shadow: 0 10px 30px rgba(0,0,0,0.08);
+    --chart-text: #64748b;
+    --chart-grid: rgba(0,0,0,0.08);
+    --chart-title: #1e293b;
+  }
+
+  /* ── App shell / header ─────────────────────────────── */
+  .app-header {
+    background: linear-gradient(180deg, rgba(0,0,0,0.02), transparent);
+  }
+  .brand-mark {
+    background: rgba(0,0,0,0.05);
+  }
+  .pill {
+    background: rgba(0,0,0,0.04);
+  }
+
+  /* ── Navigation ─────────────────────────────────────── */
+  .nav-folder:hover {
+    background: rgba(0,0,0,0.04);
+  }
+  .nav-leaf:hover {
+    background: rgba(0,0,0,0.04);
+  }
+  .nav-leaf.active {
+    background: rgba(0,0,0,0.06);
+    border-color: rgba(0,0,0,0.12);
+  }
+
+  /* ── Buttons ────────────────────────────────────────── */
+  .btn {
+    background: rgba(0,0,0,0.05);
+  }
+  .btn:hover {
+    background: rgba(0,0,0,0.08);
+  }
+
+  /* ── Trunk Activity ─────────────────────────────────── */
+  .trunk-status--connected { border-color: #16a34a; color: #16a34a; }
+  .trunk-status--closed     { border-color: #dc2626; color: #dc2626; }
+
+  .trunk-filter-item:hover {
+    background: rgba(0,0,0,0.04);
+  }
+
+  .trunk-dot--green { background: #16a34a; }
+  .trunk-dot--red   { background: #dc2626; }
+  .trunk-dot--gray  { background: #9ca3af; }
+
+  .trunk-total-row {
+    background: var(--surface-alt, rgba(0,0,0,0.03));
+  }
+
+  /* Threshold warning */
+  .trunk-threshold-banner {
+    background: rgba(239,68,68,0.08);
+    border-color: rgba(239,68,68,0.30);
+    color: #dc2626;
+  }
+  .trunk-total-row--warn td {
+    color: #dc2626 !important;
+    background: rgba(239,68,68,0.06);
+  }
+
+  /* Fullscreen */
+  .trunk-activity--fullscreen {
+    background: var(--bg);
+  }
+
+  /* ── Alert panel ────────────────────────────────────── */
+  .trunk-alert-overlay {
+    background: rgba(0,0,0,0.25);
+  }
+  .trunk-alert-panel {
+    box-shadow: -6px 0 24px rgba(0,0,0,0.12);
+  }
+  .trunk-alert-input {
+    color-scheme: light;
+  }
+  .trunk-alert-save:hover {
+    background: #2563eb !important;
+  }
+  .trunk-alert-status--ok  { color: #16a34a; }
+  .trunk-alert-status--err { color: #dc2626; }
+  .trunk-alert-toggle--active {
+    color: #2563eb !important;
+    border-color: #2563eb !important;
+  }
+
+  /* ── Trunk History ──────────────────────────────────── */
+  .trunk-history-preset:hover {
+    background: rgba(0,0,0,0.06);
+  }
+  .trunk-history-date {
+    color-scheme: light;
+  }
+  .trunk-history-date::-webkit-calendar-picker-indicator {
+    filter: none;
+  }
+
+  /* ── Multi-select dropdown ──────────────────────────── */
+  .ms-dropdown__trigger {
+    background: rgba(0,0,0,0.05);
+  }
+  .ms-dropdown__trigger:hover {
+    background: rgba(0,0,0,0.08);
+  }
+  .ms-dropdown__item:hover {
+    background: rgba(0,0,0,0.05);
+  }
+
+  /* ── Agent Checklists ───────────────────────────────── */
+  .checklist-filter-label {
+    color: var(--text-muted, rgba(0,0,0,0.55));
+  }
+
+  .checklist-preset {
+    background: rgba(0,0,0,0.05);
+  }
+  .checklist-preset:hover {
+    background: rgba(0,0,0,0.08);
+  }
+  .checklist-preset--active {
+    background: rgba(59,130,246,0.12);
+    border-color: rgba(59,130,246,0.35);
+    color: #2563eb;
+  }
+
+  .checklist-date {
+    color-scheme: light;
+  }
+  .checklist-date::-webkit-calendar-picker-indicator {
+    filter: none;
+  }
+
+  .checklist-search-btn {
+    background: rgba(59,130,246,0.12);
+    border-color: rgba(59,130,246,0.35);
+    color: #2563eb;
+  }
+  .checklist-search-btn:hover {
+    background: rgba(59,130,246,0.20);
+  }
+
+  .checklist-status-btn--active {
+    background: rgba(59,130,246,0.12);
+    border-color: rgba(59,130,246,0.35);
+    color: #2563eb;
+  }
+
+  .checklist-export-btn {
+    background: rgba(22,163,74,0.10);
+    border-color: rgba(22,163,74,0.30);
+    color: #16a34a;
+  }
+  .checklist-export-btn:hover {
+    background: rgba(22,163,74,0.18);
+  }
+
+  .checklist-chart-wrap {
+    background: rgba(0,0,0,0.02);
+  }
+
+  .checklist-row:hover {
+    background: rgba(0,0,0,0.03);
+  }
+  .checklist-row--active {
+    background: rgba(59,130,246,0.08);
+  }
+
+  /* Badges */
+  .checklist-badge--none {
+    background: rgba(0,0,0,0.05);
+  }
+  .checklist-badge--complete {
+    color: #16a34a;
+    background: rgba(22,163,74,0.10);
+  }
+  .checklist-badge--incomplete {
+    color: #ca8a04;
+    background: rgba(202,138,4,0.10);
+  }
+
+  /* Drill-down items */
+  .checklist-drilldown__item--ticked {
+    background: rgba(22,163,74,0.06);
+    border-color: rgba(22,163,74,0.15);
+  }
+  .checklist-drilldown__item--unticked {
+    background: rgba(202,138,4,0.06);
+    border-color: rgba(202,138,4,0.12);
+  }
 }
