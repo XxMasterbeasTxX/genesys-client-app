@@ -680,8 +680,6 @@ body {
   flex-shrink: 0;
 }
 
-.ms-dropdown__list { /* scrollable item container – inherits overflow from panel */ }
-
 /* ═══════════════════════════════════════════════════════════
    Agent Checklists view
    ═══════════════════════════════════════════════════════════ */
@@ -811,7 +809,7 @@ body {
 .checklist-chart-wrap {
   flex: 1;
   min-width: 0;
-  max-width: 440px;
+  max-width: 880px;
   margin: 0 auto;
   height: 200px;
   background: rgba(255,255,255,0.03);

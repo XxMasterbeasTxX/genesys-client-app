@@ -391,6 +391,20 @@ These files contain customer-tunable settings. Adjust as needed:
 | `MEDIA_KEYS` | 7 media types | Communication keys to extract from conversation participants |
 | `TICK_STATE` | `Ticked/Unticked` | API tick state values (frozen enum) |
 | `STATUS_FILTER` | `all/complete/incomplete` | Client-side filter values (frozen enum) |
+| `CHART_CONFIG.title` | `Checklist Completion` | Bar chart heading text |
+| `CHART_CONFIG.titleColor` | `#e0e0e0` | Chart title colour |
+| `CHART_CONFIG.titleFontSize` | `13` | Chart title font size (px) |
+| `CHART_CONFIG.axisColor` | `#aaa` | Axis tick/label colour |
+| `CHART_CONFIG.axisFontSize` | `11` | Axis tick font size (px) |
+| `CHART_CONFIG.gridColor` | `rgba(255,255,255,0.06)` | Horizontal grid line colour |
+| `CHART_CONFIG.completeColor` | `rgba(74,222,128,0.7)` | "Complete" bar fill colour |
+| `CHART_CONFIG.incompleteColor` | `rgba(251,191,36,0.7)` | "Incomplete" bar fill colour |
+| `CHART_CONFIG.borderRadius` | `4` | Bar corner radius (px) |
+| `CHART_CONFIG.barPercentage` | `0.6` | Fraction of width each bar occupies |
+| `EXPORT_FILENAME_PREFIX` | `Agent_Checklists` | Excel filename prefix (date is appended) |
+| `EXPORT_INTERACTION_COLS` | 8 columns | Column widths for Sheet 1 (Interactions) |
+| `EXPORT_ITEM_COLS` | 7 columns | Column widths for Sheet 2 (Checklist Items) |
+| `LABELS` | Various | All UI button text, badge labels, and chart axis labels |
 
 ### 7.3 Collection Interval — `api/collectTrunkMetrics/function.json`
 
@@ -541,6 +555,10 @@ Run through these checks after deployment:
   - [ ] Confirm interactions appear and enrich with checklist data
   - [ ] Click a row with a checklist → verify drill-down shows checklist items with tick status
   - [ ] Test status filter buttons (All / Completed / Incomplete)
+  - [ ] Verify the completion bar chart appears above the table showing Complete vs Incomplete counts
+  - [ ] After enrichment completes, verify the **⬇ Export Excel** button appears in the top-right header
+  - [ ] Click Export Excel → a new tab opens with a Save button → click Save → verify a two-sheet XLSX downloads
+  - [ ] If pop-ups are blocked, allow pop-ups for the site and retry
 
 ### Backend
 
@@ -676,6 +694,19 @@ To embed the app inside the Genesys Cloud client interface:
 
 - **Cause**: The Genesys analytics API rejects intervals exceeding 31 days
 - **Fix**: Select a shorter date range. The maximum is enforced client-side and configured via `MAX_INTERVAL_DAYS` in `checklistConfig.js`.
+
+### Agent Checklists — Excel export opens blank tab or nothing happens
+
+- **Cause**: Pop-ups are blocked by the browser, or the `download.html` helper page is missing
+- **Fix**: The app runs inside a cross-origin Genesys Cloud iframe where direct downloads are blocked. The export works by opening `download.html` in a new tab, which uses `showSaveFilePicker()` on a real user click. Ensure:
+  1. Pop-ups are allowed for the site
+  2. `download.html` exists in the repository root
+  3. `js/lib/xlsx.full.min.js` is present (SheetJS library)
+
+### Agent Checklists — bar chart not visible
+
+- **Cause**: No enriched checklist data yet, or Chart.js not loaded
+- **Fix**: The chart only appears after at least one interaction has been enriched with checklist data. Verify Chart.js loads from the CDN (`cdn.jsdelivr.net/npm/chart.js@4`). Chart styling can be adjusted in `CHART_CONFIG` within `checklistConfig.js`; chart container sizing is in `css/styles.css` (`.checklist-chart-wrap`).
 
 ---
 

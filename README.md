@@ -18,12 +18,15 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 | **Trunk History** | Historical peak concurrent-call chart powered by an Azure Functions backend that collects metrics every minute (configurable). Preset and custom date-range picker, peak/avg stats cards, server-side aggregation (hourly/daily buckets with peak + avg lines) |
 | **Alert System** | Configurable call-count threshold with cooldown. When breached, executes Genesys Cloud Data Actions to send SMS notifications (Email placeholder ready). Per-channel fields (phone number, sender, message) configured from the in-app alert panel. Channel definitions driven by a shared backend config (`channelConfig.js`) — adding a new channel requires only a config entry. |
 | **Agent Copilot Checklists** | Historical view of interactions that used Agent Copilot checklists. Cascading multi-select filters (Copilot → Queue → Agent), configurable period selector with 31-day API limit validation, background enrichment with abort-on-re-search. Drill-down shows individual checklist items with agent/AI tick status. Status filtering (All / Completed / Incomplete) — "All" automatically hides interactions without checklist data. |
+| **Completion Bar Chart** | Chart.js 4 bar chart showing Complete vs Incomplete counts for the currently filtered results. Positioned alongside the filter bar; colours, fonts, and sizing are all configurable in `checklistConfig.js`. |
+| **Excel Export** | Two-sheet XLSX export (Interactions + Checklist Items) powered by SheetJS. Works inside the cross-origin Genesys Cloud iframe via a `download.html` helper page that uses `showSaveFilePicker()` with a real user gesture. Column widths, filename prefix, and all labels are configurable in `checklistConfig.js`. |
 
 ## Tech Stack
 
 - **Front-end** — Vanilla JS, ES modules (`type="module"`), no build step
 - **Routing** — Hash-based SPA router
 - **Charts** — [Chart.js 4](https://www.chartjs.org/) via CDN
+- **Excel** — [SheetJS](https://sheetjs.com/) (xlsx-0.20.3, hosted locally at `js/lib/xlsx.full.min.js`)
 - **Auth** — OAuth 2.0 PKCE (OIDC scopes `openid profile email`)
 - **Real-time** — Genesys Cloud WebSocket notifications with REST subscription management
 - **Backend** — Azure Functions (Node.js 20, Consumption plan) for scheduled metric collection and history API
@@ -35,6 +38,7 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 
 ```text
 ├── index.html                        # App shell (header, nav, main outlet)
+├── download.html                     # Excel download helper (iframe workaround)
 ├── css/
 │   └── styles.css                    # All application styles
 ├── js/
@@ -45,6 +49,8 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 │   ├── navConfig.js                  # Navigation tree definition
 │   ├── pageRegistry.js              # Route → lazy page-loader map
 │   ├── utils.js                      # Shared helpers (escapeHtml, …)
+│   ├── lib/
+│   │   └── xlsx.full.min.js           # SheetJS library for Excel export
 │   ├── components/
 │   │   └── multiSelect.js            # Reusable multi-select dropdown component
 │   ├── services/
@@ -133,7 +139,7 @@ Configuration follows a **layered** approach designed to scale as the app grows:
 | `js/pages/dashboards/trunks/trunkConfig.js` | Feature | Call threshold, poll interval, chart history length, colour palette |
 | `js/pages/dashboards/trunks/alertConfig.js` | Feature | Default threshold (0 = disabled), default cooldown (15 min) |
 | `js/pages/dashboards/trunks/historyConfig.js` | Feature | Default date range, chart max points, colours |
-| `js/pages/dashboards/agent-copilot/checklistConfig.js` | Feature | Date range presets, query page size, enrichment batch size, API constants |
+| `js/pages/dashboards/agent-copilot/checklistConfig.js` | Feature | Date range presets, query page size, enrichment batch size, API constants, chart appearance, export settings, UI labels |
 | `api/shared/channelConfig.js` | Backend | Notification channel definitions (SMS action ID, fields, defaults) |
 
 Feature-level config files live alongside their feature code so new modules can follow the same pattern without bloating the global config.
