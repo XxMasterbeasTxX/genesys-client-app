@@ -807,34 +807,45 @@ export async function render({ route, me, api }) {
       ];
       XLSX.utils.book_append_sheet(wb, ws2, "Checklist Items");
 
-      // ── Download (iframe-safe via data URI) ────────────────
+      // ── Download (iframe-safe: blob in popup context) ──────
       const today = new Date().toISOString().slice(0, 10);
       const fileName = `Agent_Checklists_${today}.xlsx`;
-      const b64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
+      const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
       const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
-      // Open a small helper window that triggers the download
+      // Open a helper popup – it's top-level so downloads work
       const popup = window.open("", "_blank");
       if (popup) {
         popup.document.write(
-          `<!DOCTYPE html><html><head><title>Downloading…</title></head><body>` +
-          `<p>Your download should start automatically. You can close this tab.</p>` +
-          `<a id="dl" href="data:${mime};base64,${b64}" download="${fileName}">` +
-          `Click here if download does not start</a>` +
-          `<script>document.getElementById("dl").click();<\/script>` +
-          `</body></html>`,
+          "<!DOCTYPE html><html><head><title>Downloading…</title></head>" +
+          "<body><p>Preparing download…</p></body></html>",
         );
         popup.document.close();
-        console.log("[Export] popup download triggered:", fileName);
+
+        // Create blob inside the popup's own context (top-level, no sandbox)
+        const blob = new popup.Blob([new Uint8Array(wbOut)], { type: mime });
+        const url = popup.URL.createObjectURL(blob);
+        const a = popup.document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        popup.document.body.appendChild(a);
+        a.click();
+        console.log("[Export] popup blob download triggered:", fileName);
+        setTimeout(() => {
+          popup.URL.revokeObjectURL(url);
+          popup.close();
+        }, 3000);
       } else {
-        // Popup blocked – fall back to data URI in current frame
+        // Popup blocked – try in current frame anyway
+        const blob = new Blob([new Uint8Array(wbOut)], { type: mime });
+        const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = `data:${mime};base64,${b64}`;
+        a.href = url;
         a.download = fileName;
         document.body.appendChild(a);
         a.click();
-        console.log("[Export] local <a> data-URI download:", fileName);
-        setTimeout(() => document.body.removeChild(a), 500);
+        console.log("[Export] local blob download:", fileName);
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
       }
     } catch (err) {
       console.error("Export failed:", err);
