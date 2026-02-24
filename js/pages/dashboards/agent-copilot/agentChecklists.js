@@ -221,7 +221,15 @@ export async function render({ route, me, api }) {
     }
   });
 
-  filterBar.append(copilotWrap, queueWrap, agentWrap, periodWrap, searchBtn);
+  const filterRow1 = document.createElement("div");
+  filterRow1.className = "checklist-filter-row";
+  filterRow1.append(copilotWrap, queueWrap, agentWrap);
+
+  const filterRow2 = document.createElement("div");
+  filterRow2.className = "checklist-filter-row";
+  filterRow2.append(periodWrap, searchBtn);
+
+  filterBar.append(filterRow1, filterRow2);
 
   // ── Status filter bar ──────────────────────────────────
   const statusBar = document.createElement("div");

@@ -692,6 +692,11 @@ body {
 /* ── Filter bar ──────────────────────────────────────────── */
 .checklist-filters {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.checklist-filter-row {
+  display: flex;
   align-items: flex-end;
   gap: 10px;
   flex-wrap: wrap;
@@ -801,7 +806,7 @@ body {
   min-width: 0;
 }
 .checklist-chart-wrap {
-  flex: 0 0 220px;
+  flex: 0 0 440px;
   height: 200px;
   background: rgba(255,255,255,0.03);
   border: 1px solid var(--border);
