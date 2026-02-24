@@ -812,6 +812,7 @@ body {
   flex: 1;
   min-width: 0;
   max-width: 440px;
+  margin: 0 auto;
   height: 200px;
   background: rgba(255,255,255,0.03);
   border: 1px solid var(--border);
