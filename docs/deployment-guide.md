@@ -85,6 +85,10 @@ This client authenticates users via the browser using Authorization Code + PKCE.
 
 2. Under **Roles**, assign the roles needed for the features being used:
    - **Telephony** → needed for trunk activity/history dashboards
+   - **Analytics** → `analytics:conversationDetail:view` — needed for Agent Copilot Checklists (conversation detail queries)
+   - **Conversation** → `conversation:communication:view` — needed to fetch conversation participants and checklist data
+   - **Assistants** → `assistants:assistant:view`, `assistants:queue:view` — needed to list copilot assistants and their queue assignments
+   - **Routing** → `routing:queue:view`, `routing:queue:member:view` — needed to resolve queue names and list queue members for the agent filter
    - Additional roles depending on which dashboard pages are enabled
 
 3. Click **Save**
@@ -374,6 +378,20 @@ These files contain customer-tunable settings. Adjust as needed:
 | `CHART_LINE_COLOUR` | `#3b82f6` | Main line colour |
 | `CHART_PEAK_COLOUR` | `#ef4444` | Peak marker colour |
 
+**`js/pages/dashboards/agent-copilot/checklistConfig.js`** — Agent Copilot Checklists:
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `DEFAULT_RANGE_DAYS` | `7` | Default date range shown on page load |
+| `RANGE_PRESETS` | Today, 7d, 30d | Preset period buttons shown in the toolbar |
+| `MAX_INTERVAL_DAYS` | `31` | Maximum query interval (Genesys API limit) |
+| `QUERY_PAGE_SIZE` | `100` | Max conversations per analytics query page |
+| `ENRICHMENT_BATCH` | `10` | Number of conversations enriched in parallel |
+| `QUEUE_RESOLVE_BATCH` | `10` | Number of queue-name lookups run in parallel |
+| `MEDIA_KEYS` | 7 media types | Communication keys to extract from conversation participants |
+| `TICK_STATE` | `Ticked/Unticked` | API tick state values (frozen enum) |
+| `STATUS_FILTER` | `all/complete/incomplete` | Client-side filter values (frozen enum) |
+
 ### 7.3 Collection Interval — `api/collectTrunkMetrics/function.json`
 
 The timer schedule controls how often trunk metrics are collected:
@@ -515,6 +533,14 @@ Run through these checks after deployment:
 - [ ] After login, verify the sidebar navigation appears
 - [ ] Navigate to **Dashboards → Trunks → Activity** — confirm live data appears
 - [ ] Navigate to **Dashboards → Trunks → History** — confirm the chart loads (may say "No data" initially)
+- [ ] Navigate to **Dashboards → Agent Copilot → Agent Checklists**:
+  - [ ] Verify copilot assistants load in the first dropdown
+  - [ ] Select a copilot → verify queues cascade into the second dropdown
+  - [ ] Select a queue → verify agents cascade into the third dropdown
+  - [ ] Click a period preset or set custom dates (max 31 days) and click Search
+  - [ ] Confirm interactions appear and enrich with checklist data
+  - [ ] Click a row with a checklist → verify drill-down shows checklist items with tick status
+  - [ ] Test status filter buttons (All / Completed / Incomplete)
 
 ### Backend
 
@@ -635,6 +661,21 @@ To embed the app inside the Genesys Cloud client interface:
 
 - **Cause**: Redirect URI mismatch between `config.js` and Genesys OAuth client
 - **Fix**: The `oauthRedirectUri` in `config.js` must match **exactly** what is configured in Genesys Admin → OAuth client → Authorized redirect URIs (including protocol, no trailing slash).
+
+### Agent Checklists — "No copilot-enabled assistants found"
+
+- **Cause**: No assistants with copilot enabled exist, or the OAuth client lacks `assistants:assistant:view` permission
+- **Fix**: Verify copilot assistants are configured in Genesys Admin → Performance → Agent Copilot. Ensure the PKCE OAuth client has the **Assistants** role.
+
+### Agent Checklists — all interactions show "No checklist"
+
+- **Cause**: Missing `conversation:communication:view` permission, or the OAuth client cannot access the agent checklists API
+- **Fix**: Ensure the PKCE OAuth client has the **Conversation** role with `conversation:communication:view`. Verify in browser DevTools console — look for `[Checklists]` log entries with 403/404 errors.
+
+### Agent Checklists — "The selected period spans X days"
+
+- **Cause**: The Genesys analytics API rejects intervals exceeding 31 days
+- **Fix**: Select a shorter date range. The maximum is enforced client-side and configured via `MAX_INTERVAL_DAYS` in `checklistConfig.js`.
 
 ---
 

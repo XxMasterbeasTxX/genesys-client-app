@@ -17,6 +17,7 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 | **Open in New Tab** | Popout button with localStorage-based session handoff so the new tab skips re-authentication |
 | **Trunk History** | Historical peak concurrent-call chart powered by an Azure Functions backend that collects metrics every minute (configurable). Preset and custom date-range picker, peak/avg stats cards, server-side aggregation (hourly/daily buckets with peak + avg lines) |
 | **Alert System** | Configurable call-count threshold with cooldown. When breached, executes Genesys Cloud Data Actions to send SMS notifications (Email placeholder ready). Per-channel fields (phone number, sender, message) configured from the in-app alert panel. Channel definitions driven by a shared backend config (`channelConfig.js`) — adding a new channel requires only a config entry. |
+| **Agent Copilot Checklists** | Historical view of interactions that used Agent Copilot checklists. Cascading multi-select filters (Copilot → Queue → Agent), configurable period selector with 31-day API limit validation, background enrichment with abort-on-re-search. Drill-down shows individual checklist items with agent/AI tick status. Status filtering (All / Completed / Incomplete) — "All" automatically hides interactions without checklist data. |
 
 ## Tech Stack
 
@@ -44,6 +45,8 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 │   ├── navConfig.js                  # Navigation tree definition
 │   ├── pageRegistry.js              # Route → lazy page-loader map
 │   ├── utils.js                      # Shared helpers (escapeHtml, …)
+│   ├── components/
+│   │   └── multiSelect.js            # Reusable multi-select dropdown component
 │   ├── services/
 │   │   ├── apiClient.js              # Generic REST client + Genesys endpoints
 │   │   ├── authService.js            # OAuth PKCE flow, token refresh, tab handoff
@@ -54,7 +57,8 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 │       ├── placeholder.js            # Stub for future pages
 │       └── dashboards/
 │           ├── agent-copilot/
-│           │   ├── agentChecklists.js
+│           │   ├── agentChecklists.js    # Agent Copilot checklist history view
+│           │   ├── checklistConfig.js    # Feature-level tunables for checklists
 │           │   └── performance.js
 │           └── trunks/
 │               ├── activity.js       # Live trunk activity dashboard
@@ -129,6 +133,7 @@ Configuration follows a **layered** approach designed to scale as the app grows:
 | `js/pages/dashboards/trunks/trunkConfig.js` | Feature | Call threshold, poll interval, chart history length, colour palette |
 | `js/pages/dashboards/trunks/alertConfig.js` | Feature | Default threshold (0 = disabled), default cooldown (15 min) |
 | `js/pages/dashboards/trunks/historyConfig.js` | Feature | Default date range, chart max points, colours |
+| `js/pages/dashboards/agent-copilot/checklistConfig.js` | Feature | Date range presets, query page size, enrichment batch size, API constants |
 | `api/shared/channelConfig.js` | Backend | Notification channel definitions (SMS action ID, fields, defaults) |
 
 Feature-level config files live alongside their feature code so new modules can follow the same pattern without bloating the global config.
