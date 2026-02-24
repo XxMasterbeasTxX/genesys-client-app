@@ -246,6 +246,15 @@ export async function render({ route, me, api }) {
   });
   statusBar.append(...statusBtns);
 
+  // Export Excel button (hidden until enrichment completes)
+  const exportBtn = document.createElement("button");
+  exportBtn.type = "button";
+  exportBtn.className = "btn btn-sm checklist-export-btn";
+  exportBtn.textContent = "⬇ Export Excel";
+  exportBtn.hidden = true;
+  exportBtn.addEventListener("click", exportToExcel);
+  statusBar.append(exportBtn);
+
   function syncStatusButtons() {
     for (const btn of statusBtns) {
       btn.classList.toggle(
@@ -419,6 +428,7 @@ export async function render({ route, me, api }) {
 
     statusEl.textContent = "Loading…";
     tableWrap.innerHTML = "";
+    exportBtn.hidden = true;
     drillPanel.hidden = true;
     expandedRowId = null;
     conversations = [];
@@ -630,6 +640,9 @@ export async function render({ route, me, api }) {
     statusEl.textContent =
       `${total} interaction${total !== 1 ? "s" : ""} — ` +
       `${withChecklist} with checklist data`;
+
+    // Show export button once enrichment is done
+    exportBtn.hidden = !withChecklist;
   }
 
   async function enrichOne(conv) {
@@ -699,6 +712,95 @@ export async function render({ route, me, api }) {
       });
       updateRowEnrichment(convId);
     }
+  }
+
+  // ── Export to Excel (two-sheet XLSX) ───────────────────
+  function exportToExcel() {
+    if (typeof XLSX === "undefined") {
+      statusEl.textContent = "Excel library not loaded. Please reload the page.";
+      return;
+    }
+
+    // ── Sheet 1: Interactions ──────────────────────────────
+    const interactionRows = [];
+    for (const conv of conversations) {
+      const convId = conv.conversationId;
+      const info = enriched.get(convId);
+      if (!info?.checklists?.length) continue; // skip interactions without checklists
+
+      const agent = findAgentParticipant(conv);
+      const queueId = agent ? extractQueueId(agent) : null;
+      const queueName = queueId ? (queueNameCache.get(queueId) ?? queueId) : "";
+      const userName = agent?.participantName ?? agent?.userId ?? "";
+      const mediaType = agent ? extractMediaType(agent) : "";
+      const duration = agent ? extractDuration(agent) : 0;
+
+      interactionRows.push({
+        "Conversation ID": convId,
+        "Time": conv.conversationStart ? new Date(conv.conversationStart) : "",
+        "Agent": userName,
+        "Queue": queueName,
+        "Media": mediaType ?? "",
+        "Duration (s)": duration ? Math.round(duration / 1000) : 0,
+        "Checklist": info.checklists.map((c) => c.name).join(", "),
+        "Status": info.completion === STATUS_FILTER.COMPLETE ? "Complete" : "Incomplete",
+      });
+    }
+
+    // ── Sheet 2: Checklist Items ───────────────────────────
+    const itemRows = [];
+    for (const conv of conversations) {
+      const convId = conv.conversationId;
+      const info = enriched.get(convId);
+      if (!info?.checklists?.length) continue;
+
+      for (const cl of info.checklists) {
+        for (const item of cl.checklistItems ?? []) {
+          itemRows.push({
+            "Conversation ID": convId,
+            "Checklist": cl.name ?? "",
+            "Item": item.name ?? "",
+            "Description": item.description ?? "",
+            "Agent Ticked": item.stateFromAgent === TICK_STATE.TICKED ? "Yes" : "No",
+            "AI Ticked": item.stateFromModel === TICK_STATE.TICKED ? "Yes" : "No",
+            "Important": item.important ? "Yes" : "No",
+          });
+        }
+      }
+    }
+
+    // ── Build workbook ─────────────────────────────────────
+    const wb = XLSX.utils.book_new();
+
+    const ws1 = XLSX.utils.json_to_sheet(interactionRows);
+    // Set column widths for readability
+    ws1["!cols"] = [
+      { wch: 38 }, // Conversation ID
+      { wch: 20 }, // Time
+      { wch: 24 }, // Agent
+      { wch: 22 }, // Queue
+      { wch: 10 }, // Media
+      { wch: 12 }, // Duration
+      { wch: 24 }, // Checklist
+      { wch: 12 }, // Status
+    ];
+    XLSX.utils.book_append_sheet(wb, ws1, "Interactions");
+
+    const ws2 = XLSX.utils.json_to_sheet(itemRows);
+    ws2["!cols"] = [
+      { wch: 38 }, // Conversation ID
+      { wch: 24 }, // Checklist
+      { wch: 30 }, // Item
+      { wch: 40 }, // Description
+      { wch: 12 }, // Agent Ticked
+      { wch: 10 }, // AI Ticked
+      { wch: 10 }, // Important
+    ];
+    XLSX.utils.book_append_sheet(wb, ws2, "Checklist Items");
+
+    // ── Download ───────────────────────────────────────────
+    const today = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `Agent_Checklists_${today}.xlsx`);
   }
 
   // ── Row click → drill-down ─────────────────────────────

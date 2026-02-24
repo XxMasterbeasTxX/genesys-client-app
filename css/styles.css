@@ -771,6 +771,18 @@ body {
   color: #93bbfd;
 }
 
+.checklist-export-btn {
+  margin-left: auto;
+  background: rgba(74,222,128,0.15);
+  border: 1px solid rgba(74,222,128,0.35);
+  color: #4ade80;
+  font-weight: 600;
+  cursor: pointer;
+}
+.checklist-export-btn:hover {
+  background: rgba(74,222,128,0.25);
+}
+
 /* ── Status line ─────────────────────────────────────────── */
 .checklist-status {
   font-size: 13px;
