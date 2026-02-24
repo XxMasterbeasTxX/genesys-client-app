@@ -33,6 +33,7 @@ import {
   TABLE_DATE_FORMAT,
   CHART_CONFIG,
   EXPORT_FILENAME_PREFIX,
+  EXPORT_SUMMARY_COLS,
   EXPORT_INTERACTION_COLS,
   EXPORT_ITEM_COLS,
   LABELS,
@@ -877,8 +878,36 @@ export async function render({ route, me, api }) {
         }
       }
 
+      // ── Sheet 1: Summary (pre-aggregated pivot) ──────────
+      const summaryMap = new Map(); // key → { agent, queue, checklist, total, complete, incomplete }
+      for (const row of interactionRows) {
+        const key = `${row.Agent}|${row.Queue}|${row.Checklist}`;
+        if (!summaryMap.has(key)) {
+          summaryMap.set(key, {
+            Agent: row.Agent,
+            Queue: row.Queue,
+            Checklist: row.Checklist,
+            Total: 0,
+            Complete: 0,
+            Incomplete: 0,
+          });
+        }
+        const s = summaryMap.get(key);
+        s.Total++;
+        if (row.Status === "Complete") s.Complete++;
+        else s.Incomplete++;
+      }
+      const summaryRows = [...summaryMap.values()].map((s) => ({
+        ...s,
+        "Completion %": s.Total ? Math.round((s.Complete / s.Total) * 100) + "%" : "0%",
+      }));
+
       // ── Build workbook ───────────────────────────────────
       const wb = XLSX.utils.book_new();
+
+      const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+      wsSummary["!cols"] = EXPORT_SUMMARY_COLS;
+      XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
       const ws1 = XLSX.utils.json_to_sheet(interactionRows);
       ws1["!cols"] = EXPORT_INTERACTION_COLS;

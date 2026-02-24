@@ -116,7 +116,18 @@ export const CHART_CONFIG = Object.freeze({
 /** Filename prefix — final name: {prefix}_{YYYY-MM-DD}.xlsx */
 export const EXPORT_FILENAME_PREFIX = "Agent_Checklists";
 
-/** Column widths (wch = "width in characters") for Sheet 1. */
+/** Column widths (wch = "width in characters") for Sheet 1 (Summary). */
+export const EXPORT_SUMMARY_COLS = [
+  { wch: 28 }, // Agent
+  { wch: 24 }, // Queue
+  { wch: 24 }, // Checklist
+  { wch: 14 }, // Total
+  { wch: 14 }, // Complete
+  { wch: 14 }, // Incomplete
+  { wch: 14 }, // Completion %
+];
+
+/** Column widths for Sheet 2 (Interactions). */
 export const EXPORT_INTERACTION_COLS = [
   { wch: 38 }, // Conversation ID
   { wch: 20 }, // Time
@@ -128,7 +139,7 @@ export const EXPORT_INTERACTION_COLS = [
   { wch: 12 }, // Status
 ];
 
-/** Column widths for Sheet 2 (Checklist Items). */
+/** Column widths for Sheet 3 (Checklist Items). */
 export const EXPORT_ITEM_COLS = [
   { wch: 38 }, // Conversation ID
   { wch: 24 }, // Checklist
