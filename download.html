@@ -6,7 +6,7 @@
   <style>
     body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0;
            display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    .box { text-align: center; }
+    .box { text-align: center; max-width: 500px; }
     .box p { font-size: 1.1rem; margin-bottom: 1.5rem; }
     .box .sub { color: #888; font-size: 0.85rem; margin-top: 1rem; }
     .dl-btn { display: inline-block; padding: 14px 32px; font-size: 1.1rem; font-weight: 600;
@@ -18,41 +18,79 @@
 <body>
   <div class="box">
     <p id="msg">Your file is ready</p>
-    <a id="dlBtn" class="dl-btn" style="display:none"></a>
+    <button id="dlBtn" class="dl-btn" style="display:none"></button>
     <p class="sub" id="sub"></p>
   </div>
   <script>
-    try {
-      const hash = location.hash.substring(1);
-      const sep = hash.indexOf("|");
-      if (!hash || sep < 0) {
-        document.getElementById("msg").textContent = "No export data found. Please try again.";
-      } else {
-        const fileName = decodeURIComponent(hash.substring(0, sep));
-        const b64 = hash.substring(sep + 1);
+    (function () {
+      var msgEl = document.getElementById("msg");
+      var subEl = document.getElementById("sub");
+      var btnEl = document.getElementById("dlBtn");
 
-        const raw = atob(b64);
-        const bytes = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-        const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-        const blob = new Blob([bytes], { type: mime });
-        const url = URL.createObjectURL(blob);
+      try {
+        var hash = location.hash.substring(1);
+        var sep = hash.indexOf("|");
+        if (!hash || sep < 0) { msgEl.textContent = "No export data found."; return; }
 
-        const btn = document.getElementById("dlBtn");
-        btn.href = url;
-        btn.download = fileName;
-        btn.textContent = "\u2B07 Save " + fileName;
-        btn.style.display = "inline-block";
+        var fileName = decodeURIComponent(hash.substring(0, sep));
+        var b64 = hash.substring(sep + 1);
 
-        document.getElementById("msg").textContent = "Click the button to save your file:";
-        document.getElementById("sub").textContent = "You can close this tab after downloading.";
+        // Decode base64
+        var raw = atob(b64);
+        var bytes = new Uint8Array(raw.length);
+        for (var i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+        var mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+        var blob = new Blob([bytes], { type: mime });
 
+        // Clear hash for privacy
         history.replaceState(null, "", location.pathname);
+
+        msgEl.textContent = "Click the button to save your file:";
+        btnEl.textContent = "\u2B07 Save " + fileName;
+        btnEl.style.display = "inline-block";
+        subEl.textContent = "You can close this tab after downloading.";
+
+        btnEl.addEventListener("click", async function () {
+          try {
+            // Primary: File System Access API (native Save As dialog)
+            if (window.showSaveFilePicker) {
+              var handle = await window.showSaveFilePicker({
+                suggestedName: fileName,
+                types: [{ description: "Excel Workbook", accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] } }]
+              });
+              var writable = await handle.createWritable();
+              await writable.write(blob);
+              await writable.close();
+              msgEl.textContent = "\u2705 Saved: " + fileName;
+              subEl.textContent = "You can close this tab now.";
+              return;
+            }
+          } catch (e) {
+            if (e.name === "AbortError") { return; } // user cancelled
+            console.warn("showSaveFilePicker failed, trying fallback:", e);
+          }
+
+          // Fallback: blob URL <a> click
+          try {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement("a");
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+            msgEl.textContent = "Download started: " + fileName;
+          } catch (e2) {
+            msgEl.textContent = "Download failed: " + e2.message;
+          }
+        });
+
+      } catch (err) {
+        msgEl.textContent = "Error: " + err.message;
+        console.error("Download helper error:", err);
       }
-    } catch (err) {
-      document.getElementById("msg").textContent = "Download failed: " + err.message;
-      console.error("Download helper error:", err);
-    }
+    })();
   </script>
 </body>
 </html>
