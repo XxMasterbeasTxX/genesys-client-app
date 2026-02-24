@@ -807,7 +807,7 @@ export async function render({ route, me, api }) {
       ];
       XLSX.utils.book_append_sheet(wb, ws2, "Checklist Items");
 
-      // ── Download via Blob fallback (works inside iframes) ─
+      // ── Download (iframe-safe) ───────────────────────────
       const today = new Date().toISOString().slice(0, 10);
       const fileName = `Agent_Checklists_${today}.xlsx`;
       const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
@@ -815,16 +815,34 @@ export async function render({ route, me, api }) {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      console.log("[Export] download triggered:", fileName);
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 200);
+
+      // Try 1: open in new tab (works even inside sandboxed iframes)
+      const win = window.open(url, "_blank");
+      if (win) {
+        console.log("[Export] opened blob in new tab – browser will download:", fileName);
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      } else {
+        // Try 2: <a> click on top-level document if same-origin
+        try {
+          const topDoc = window.top.document;
+          const a = topDoc.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          topDoc.body.appendChild(a);
+          a.click();
+          console.log("[Export] download via top document:", fileName);
+          setTimeout(() => { topDoc.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+        } catch {
+          // Try 3: fallback to current document <a> click
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          console.log("[Export] download via local <a>:", fileName);
+          setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+        }
+      }
     } catch (err) {
       console.error("Export failed:", err);
       statusEl.textContent = `⚠ Export failed: ${err.message}`;
