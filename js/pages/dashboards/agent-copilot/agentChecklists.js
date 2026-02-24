@@ -31,6 +31,11 @@ import {
   TICK_STATE,
   STATUS_FILTER,
   TABLE_DATE_FORMAT,
+  CHART_CONFIG,
+  EXPORT_FILENAME_PREFIX,
+  EXPORT_INTERACTION_COLS,
+  EXPORT_ITEM_COLS,
+  LABELS,
 } from "./checklistConfig.js";
 
 /* ── Helpers ───────────────────────────────────────────── */
@@ -194,7 +199,7 @@ export async function render({ route, me, api }) {
   const applyBtn = document.createElement("button");
   applyBtn.type = "button";
   applyBtn.className = "btn btn-sm checklist-preset";
-  applyBtn.textContent = "Apply";
+  applyBtn.textContent = LABELS.applyBtn;
   applyBtn.addEventListener("click", () => {
     if (fromInput.value && toInput.value) {
       setActivePreset(null);
@@ -211,7 +216,7 @@ export async function render({ route, me, api }) {
   const searchBtn = document.createElement("button");
   searchBtn.type = "button";
   searchBtn.className = "btn btn-sm checklist-search-btn";
-  searchBtn.textContent = "🔍 Search";
+  searchBtn.textContent = LABELS.searchBtn;
   searchBtn.addEventListener("click", () => {
     if (fromInput.value && toInput.value) {
       doSearch(
@@ -234,9 +239,9 @@ export async function render({ route, me, api }) {
   statusBar.className = "checklist-filter-row checklist-status-bar";
 
   const statusBtns = [
-    { val: STATUS_FILTER.ALL, label: "All" },
-    { val: STATUS_FILTER.COMPLETE, label: "✅ Completed" },
-    { val: STATUS_FILTER.INCOMPLETE, label: "⚠️ Incomplete" },
+    { val: STATUS_FILTER.ALL, label: LABELS.statusAll },
+    { val: STATUS_FILTER.COMPLETE, label: LABELS.statusComplete },
+    { val: STATUS_FILTER.INCOMPLETE, label: LABELS.statusIncomplete },
   ].map(({ val, label }) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -258,7 +263,7 @@ export async function render({ route, me, api }) {
   const exportBtn = document.createElement("button");
   exportBtn.type = "button";
   exportBtn.className = "btn btn-sm checklist-export-btn";
-  exportBtn.textContent = "⬇ Export Excel";
+  exportBtn.textContent = LABELS.exportBtn;
   exportBtn.hidden = true;
   exportBtn.addEventListener("click", exportToExcel);
   header.append(exportBtn);
@@ -637,15 +642,16 @@ export async function render({ route, me, api }) {
       return;
     }
 
+    const cc = CHART_CONFIG;
     const data = {
-      labels: ["Complete", "Incomplete"],
+      labels: [LABELS.chartLabelComplete, LABELS.chartLabelIncomplete],
       datasets: [{
         data: [complete, incomplete],
-        backgroundColor: ["rgba(74,222,128,0.7)", "rgba(251,191,36,0.7)"],
-        borderColor: ["rgba(74,222,128,1)", "rgba(251,191,36,1)"],
-        borderWidth: 1,
-        borderRadius: 4,
-        barPercentage: 0.6,
+        backgroundColor: [cc.completeColor, cc.incompleteColor],
+        borderColor: [cc.completeBorder, cc.incompleteBorder],
+        borderWidth: cc.borderWidth,
+        borderRadius: cc.borderRadius,
+        barPercentage: cc.barPercentage,
       }],
     };
 
@@ -656,25 +662,25 @@ export async function render({ route, me, api }) {
         legend: { display: false },
         title: {
           display: true,
-          text: "Checklist Completion",
-          color: "#e0e0e0",
-          font: { size: 13, weight: "600" },
+          text: cc.title,
+          color: cc.titleColor,
+          font: { size: cc.titleFontSize, weight: "600" },
         },
       },
       scales: {
         x: {
-          ticks: { color: "#aaa", font: { size: 11 } },
+          ticks: { color: cc.axisColor, font: { size: cc.axisFontSize } },
           grid: { display: false },
         },
         y: {
           beginAtZero: true,
           ticks: {
-            color: "#aaa",
-            font: { size: 11 },
+            color: cc.axisColor,
+            font: { size: cc.axisFontSize },
             stepSize: 1,
             precision: 0,
           },
-          grid: { color: "rgba(255,255,255,0.06)" },
+          grid: { color: cc.gridColor },
         },
       },
     };
@@ -702,7 +708,7 @@ export async function render({ route, me, api }) {
     if (!info || !info.checklists?.length) {
       nameCell.textContent = "—";
       statusCell.innerHTML =
-        `<span class="checklist-badge checklist-badge--none">No checklist</span>`;
+        `<span class="checklist-badge checklist-badge--none">${LABELS.badgeNone}</span>`;
       return;
     }
 
@@ -710,10 +716,10 @@ export async function render({ route, me, api }) {
 
     if (info.completion === STATUS_FILTER.COMPLETE) {
       statusCell.innerHTML =
-        `<span class="checklist-badge checklist-badge--complete">✅ Complete</span>`;
+        `<span class="checklist-badge checklist-badge--complete">${LABELS.badgeComplete}</span>`;
     } else {
       statusCell.innerHTML =
-        `<span class="checklist-badge checklist-badge--incomplete">⚠️ Incomplete</span>`;
+        `<span class="checklist-badge checklist-badge--incomplete">${LABELS.badgeIncomplete}</span>`;
     }
   }
 
@@ -875,28 +881,11 @@ export async function render({ route, me, api }) {
       const wb = XLSX.utils.book_new();
 
       const ws1 = XLSX.utils.json_to_sheet(interactionRows);
-      ws1["!cols"] = [
-        { wch: 38 }, // Conversation ID
-        { wch: 20 }, // Time
-        { wch: 24 }, // Agent
-        { wch: 22 }, // Queue
-        { wch: 10 }, // Media
-        { wch: 12 }, // Duration
-        { wch: 24 }, // Checklist
-        { wch: 12 }, // Status
-      ];
+      ws1["!cols"] = EXPORT_INTERACTION_COLS;
       XLSX.utils.book_append_sheet(wb, ws1, "Interactions");
 
       const ws2 = XLSX.utils.json_to_sheet(itemRows);
-      ws2["!cols"] = [
-        { wch: 38 }, // Conversation ID
-        { wch: 24 }, // Checklist
-        { wch: 30 }, // Item
-        { wch: 40 }, // Description
-        { wch: 12 }, // Agent Ticked
-        { wch: 10 }, // AI Ticked
-        { wch: 10 }, // Important
-      ];
+      ws2["!cols"] = EXPORT_ITEM_COLS;
       XLSX.utils.book_append_sheet(wb, ws2, "Checklist Items");
 
       // ── Download via URL-hash + helper page ─────────────────
@@ -906,7 +895,7 @@ export async function render({ route, me, api }) {
       // base64 in the URL hash of download.html. The hash fragment
       // never leaves the browser and Chrome supports ~2 MB URLs.
       const today = new Date().toISOString().slice(0, 10);
-      const fileName = `Agent_Checklists_${today}.xlsx`;
+      const fileName = `${EXPORT_FILENAME_PREFIX}_${today}.xlsx`;
       const b64 = XLSX.write(wb, { bookType: "xlsx", type: "base64" });
 
       const helperUrl = new URL("download.html", document.baseURI);
