@@ -23,6 +23,13 @@ import {
   MAX_INTERVAL_DAYS,
   QUERY_PAGE_SIZE,
   ENRICHMENT_BATCH,
+  QUEUE_RESOLVE_BATCH,
+  MS_PER_DAY,
+  MEDIA_KEYS,
+  PURPOSE_AGENT,
+  METRIC_HANDLE_TIME,
+  TICK_STATE,
+  STATUS_FILTER,
   TABLE_DATE_FORMAT,
 } from "./checklistConfig.js";
 
@@ -32,10 +39,6 @@ function todayUTC() {
   const d = new Date();
   d.setUTCHours(0, 0, 0, 0);
   return d;
-}
-
-function nowUTC() {
-  return new Date();
 }
 
 function fmtDate(d) {
@@ -60,7 +63,7 @@ function fmtDuration(ms) {
 function extractDuration(participant) {
   for (const sess of participant.sessions ?? []) {
     for (const metric of sess.metrics ?? []) {
-      if (metric.name === "tHandle" && metric.value) return metric.value;
+      if (metric.name === METRIC_HANDLE_TIME && metric.value) return metric.value;
     }
   }
   return 0;
@@ -68,7 +71,7 @@ function extractDuration(participant) {
 
 /** Find the agent participant in an analytics conversation record. */
 function findAgentParticipant(conv) {
-  return (conv.participants ?? []).find((p) => p.purpose === "agent");
+  return (conv.participants ?? []).find((p) => p.purpose === PURPOSE_AGENT);
 }
 
 /** Find the queueId from a participant's sessions/segments. */
@@ -87,21 +90,21 @@ function extractMediaType(participant) {
   for (const sess of participant.sessions ?? []) {
     if (sess.mediaType) return sess.mediaType;
   }
-  return "unknown";
+  return null;
 }
 
 /**
- * Determine overall completion: "complete" if every item is ticked
- * by the agent, "incomplete" otherwise, null if no items.
+ * Determine completion across ALL checklists: "complete" only if
+ * every item in every checklist is ticked (by agent or model).
  */
-function checklistCompletion(checklistResponse) {
-  const items = checklistResponse?.checklistItems ?? [];
+function checklistCompletion(checklists) {
+  const all = (Array.isArray(checklists) ? checklists : [checklists]).filter(Boolean);
+  const items = all.flatMap((cl) => cl.checklistItems ?? []);
   if (!items.length) return null;
-  // An item is ticked if either the agent or the AI model marked it
   const allTicked = items.every(
-    (it) => it.stateFromAgent === "Ticked" || it.stateFromModel === "Ticked",
+    (it) => it.stateFromAgent === TICK_STATE.TICKED || it.stateFromModel === TICK_STATE.TICKED,
   );
-  return allTicked ? "complete" : "incomplete";
+  return allTicked ? STATUS_FILTER.COMPLETE : STATUS_FILTER.INCOMPLETE;
 }
 
 /* ── Main render ───────────────────────────────────────── */
@@ -112,7 +115,8 @@ export async function render({ route, me, api }) {
   const enriched = new Map();     // convId → { checklists, communicationId, completion }
   const queueNameCache = new Map(); // queueId → name
   const userNameCache = new Map();  // userId → name
-  let statusFilter = "all";       // "all" | "complete" | "incomplete"
+  let statusFilter = STATUS_FILTER.ALL;
+  let enrichAbort = null;          // AbortController for in-flight enrichment
   let expandedRowId = null;       // conversationId currently drilled-down
 
   // ── DOM skeleton ───────────────────────────────────────
@@ -223,12 +227,15 @@ export async function render({ route, me, api }) {
   const statusBar = document.createElement("div");
   statusBar.className = "checklist-status-bar";
 
-  const statusBtns = ["all", "complete", "incomplete"].map((val) => {
+  const statusBtns = [
+    { val: STATUS_FILTER.ALL, label: "All" },
+    { val: STATUS_FILTER.COMPLETE, label: "✅ Completed" },
+    { val: STATUS_FILTER.INCOMPLETE, label: "⚠️ Incomplete" },
+  ].map(({ val, label }) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn btn-sm checklist-status-btn";
-    btn.textContent =
-      val === "all" ? "All" : val === "complete" ? "✅ Completed" : "⚠️ Incomplete";
+    btn.textContent = label;
     btn.dataset.status = val;
     btn.addEventListener("click", () => {
       statusFilter = val;
@@ -276,9 +283,9 @@ export async function render({ route, me, api }) {
 
   // ── Load a preset range ────────────────────────────────
   function loadRange(days) {
-    const to = nowUTC();
+    const to = new Date();
     const from =
-      days === 0 ? todayUTC() : new Date(to.getTime() - days * 86_400_000);
+      days === 0 ? todayUTC() : new Date(to.getTime() - days * MS_PER_DAY);
     fromInput.value = from.toISOString().slice(0, 10);
     toInput.value = to.toISOString().slice(0, 10);
     setActivePreset(days);
@@ -326,9 +333,9 @@ export async function render({ route, me, api }) {
   async function resolveQueueNames(ids) {
     const uncached = ids.filter((id) => !queueNameCache.has(id));
 
-    // Fetch uncached in parallel batches of 10
-    for (let i = 0; i < uncached.length; i += 10) {
-      const batch = uncached.slice(i, i + 10);
+    // Fetch uncached in parallel batches
+    for (let i = 0; i < uncached.length; i += QUEUE_RESOLVE_BATCH) {
+      const batch = uncached.slice(i, i + QUEUE_RESOLVE_BATCH);
       const results = await Promise.allSettled(
         batch.map((id) => api.getQueue(id)),
       );
@@ -402,7 +409,7 @@ export async function render({ route, me, api }) {
 
     // Validate interval does not exceed API limit
     const intervalMs = to.getTime() - from.getTime();
-    const intervalDays = intervalMs / 86_400_000;
+    const intervalDays = intervalMs / MS_PER_DAY;
     if (intervalDays > MAX_INTERVAL_DAYS) {
       statusEl.textContent =
         `The selected period spans ${Math.ceil(intervalDays)} days. ` +
@@ -416,6 +423,10 @@ export async function render({ route, me, api }) {
     expandedRowId = null;
     conversations = [];
     enriched.clear();
+
+    // Cancel any in-flight enrichment from a previous search
+    if (enrichAbort) enrichAbort.abort();
+    enrichAbort = new AbortController();
 
     const interval = `${from.toISOString()}/${to.toISOString()}`;
 
@@ -466,7 +477,7 @@ export async function render({ route, me, api }) {
       statusEl.textContent = `${conversations.length} interaction${conversations.length !== 1 ? "s" : ""} found — enriching checklist data…`;
 
       renderTable();
-      enrichConversations();
+      enrichConversations(enrichAbort.signal);
     } catch (err) {
       console.error("Analytics query failed:", err);
       statusEl.textContent = `Error: ${err.message}`;
@@ -540,7 +551,7 @@ export async function render({ route, me, api }) {
     const rows = tableWrap.querySelectorAll(".checklist-row");
     for (const row of rows) {
       const info = enriched.get(row.dataset.convId);
-      if (statusFilter === "all") {
+      if (statusFilter === STATUS_FILTER.ALL) {
         // "All" shows only interactions that have checklist data
         if (!info) {
           row.hidden = false; // still loading — keep visible
@@ -578,7 +589,7 @@ export async function render({ route, me, api }) {
 
     nameCell.textContent = info.checklists.map((c) => c.name).join(", ");
 
-    if (info.completion === "complete") {
+    if (info.completion === STATUS_FILTER.COMPLETE) {
       statusCell.innerHTML =
         `<span class="checklist-badge checklist-badge--complete">✅ Complete</span>`;
     } else {
@@ -588,10 +599,12 @@ export async function render({ route, me, api }) {
   }
 
   // ── Background enrichment ──────────────────────────────
-  async function enrichConversations() {
+  async function enrichConversations(signal) {
     for (let i = 0; i < conversations.length; i += ENRICHMENT_BATCH) {
+      if (signal?.aborted) return; // search was re-triggered
       const batch = conversations.slice(i, i + ENRICHMENT_BATCH);
       await Promise.allSettled(batch.map((conv) => enrichOne(conv)));
+      if (signal?.aborted) return;
       applyTableFilter();
     }
 
@@ -611,11 +624,9 @@ export async function render({ route, me, api }) {
       // Step 1: Get full conversation to find agent communicationId(s)
       const fullConv = await api.getConversation(convId);
       const agentParts = (fullConv.participants ?? []).filter(
-        (p) => p.purpose === "agent",
+        (p) => p.purpose === PURPOSE_AGENT,
       );
-      // Communications live under media-specific keys (messages, calls, chats, etc.)
-      // NOT under a generic "communications" key.
-      const MEDIA_KEYS = ["messages", "calls", "chats", "callbacks", "emails", "socialExpressions", "videos"];
+      // Communications live under media-specific keys, NOT a generic key.
       const commIds = agentParts.flatMap((p) =>
         MEDIA_KEYS.flatMap((k) => (p[k] ?? []).map((c) => c.id)),
       );
@@ -647,7 +658,7 @@ export async function render({ route, me, api }) {
           }
 
           if (list.length) {
-            const completion = checklistCompletion(list[0]);
+            const completion = checklistCompletion(list);
             enriched.set(convId, { checklists: list, communicationId: commId, completion });
             updateRowEnrichment(convId);
             return;
@@ -769,8 +780,8 @@ export async function render({ route, me, api }) {
       itemList.className = "checklist-drilldown__items";
 
       for (const item of cl.checklistItems ?? []) {
-        const agentTicked = item.stateFromAgent === "Ticked";
-        const modelTicked = item.stateFromModel === "Ticked";
+        const agentTicked = item.stateFromAgent === TICK_STATE.TICKED;
+        const modelTicked = item.stateFromModel === TICK_STATE.TICKED;
         const ticked = agentTicked || modelTicked;
 
         const li = document.createElement("li");
@@ -784,7 +795,7 @@ export async function render({ route, me, api }) {
           <span class="checklist-drilldown__icon">${ticked ? "✅" : "❌"}</span>
           <span class="checklist-drilldown__item-name">${escapeHtml(item.name)}</span>
           ${item.important ? `<span class="checklist-drilldown__important" title="Important">⚡</span>` : ""}
-          <span class="checklist-drilldown__ai" title="AI evaluation: ${modelTicked ? "Ticked" : "Unticked"}">
+          <span class="checklist-drilldown__ai" title="AI evaluation: ${modelTicked ? TICK_STATE.TICKED : TICK_STATE.UNTICKED}">
             AI: ${modelTicked ? "✓" : "✗"}
           </span>
         `;
@@ -827,11 +838,11 @@ export async function render({ route, me, api }) {
       ` — select copilot(s) and queue(s), then search.`;
 
     // Set default date range
-    const to = nowUTC();
+    const to = new Date();
     const from =
       DEFAULT_RANGE_DAYS === 0
         ? todayUTC()
-        : new Date(to.getTime() - DEFAULT_RANGE_DAYS * 86_400_000);
+        : new Date(to.getTime() - DEFAULT_RANGE_DAYS * MS_PER_DAY);
     fromInput.value = from.toISOString().slice(0, 10);
     toInput.value = to.toISOString().slice(0, 10);
     setActivePreset(DEFAULT_RANGE_DAYS);
