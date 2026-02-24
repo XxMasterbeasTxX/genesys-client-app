@@ -715,7 +715,7 @@ export async function render({ route, me, api }) {
   }
 
   // ── Export to Excel (two-sheet XLSX) ───────────────────
-  function exportToExcel() {
+  async function exportToExcel() {
     console.log("[Export] clicked – XLSX available:", typeof XLSX !== "undefined");
     console.log("[Export] conversations:", conversations.length, "enriched:", enriched.size);
     try {
@@ -807,44 +807,41 @@ export async function render({ route, me, api }) {
       ];
       XLSX.utils.book_append_sheet(wb, ws2, "Checklist Items");
 
-      // ── Download (iframe-safe: blob in popup context) ──────
+      // ── Download via native Save-As dialog ─────────────────
       const today = new Date().toISOString().slice(0, 10);
       const fileName = `Agent_Checklists_${today}.xlsx`;
       const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
       const mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      const blob = new Blob([new Uint8Array(wbOut)], { type: mime });
 
-      // Open a helper popup – it's top-level so downloads work
-      const popup = window.open("", "_blank");
-      if (popup) {
-        popup.document.write(
-          "<!DOCTYPE html><html><head><title>Downloading…</title></head>" +
-          "<body><p>Preparing download…</p></body></html>",
-        );
-        popup.document.close();
-
-        // Create blob inside the popup's own context (top-level, no sandbox)
-        const blob = new popup.Blob([new Uint8Array(wbOut)], { type: mime });
-        const url = popup.URL.createObjectURL(blob);
-        const a = popup.document.createElement("a");
-        a.href = url;
-        a.download = fileName;
-        popup.document.body.appendChild(a);
-        a.click();
-        console.log("[Export] popup blob download triggered:", fileName);
-        setTimeout(() => {
-          popup.URL.revokeObjectURL(url);
-          popup.close();
-        }, 3000);
+      if (typeof window.showSaveFilePicker === "function") {
+        // File System Access API – opens native Save As dialog
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: fileName,
+            types: [{
+              description: "Excel Workbook",
+              accept: { [mime]: [".xlsx"] },
+            }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(blob);
+          await writable.close();
+          console.log("[Export] saved via File System Access API:", fileName);
+        } catch (abortErr) {
+          // User cancelled the dialog — not an error
+          if (abortErr.name !== "AbortError") throw abortErr;
+          console.log("[Export] user cancelled Save dialog");
+        }
       } else {
-        // Popup blocked – try in current frame anyway
-        const blob = new Blob([new Uint8Array(wbOut)], { type: mime });
+        // Fallback for browsers without File System Access API
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
         a.download = fileName;
         document.body.appendChild(a);
         a.click();
-        console.log("[Export] local blob download:", fileName);
+        console.log("[Export] fallback <a> download:", fileName);
         setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
       }
     } catch (err) {
