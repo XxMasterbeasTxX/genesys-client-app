@@ -68,6 +68,14 @@ export const NAV_TREE = [
     ],
   },
   {
+    label: "Data Tables",
+    path: "data-tables",
+    enabled: true,
+    children: [
+      { label: "Update", path: "update", enabled: true },
+    ],
+  },
+  {
     label: "Wallboards",
     path: "wallboards",
     enabled: true,

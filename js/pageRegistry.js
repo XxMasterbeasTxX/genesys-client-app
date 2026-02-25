@@ -43,6 +43,12 @@ const registry = {
     import("./pages/dashboards/trunks/history.js").then((m) =>
       m.render(ctx),
     ),
+
+  // ── Data Tables ───────────────────────────────────────────
+  "/data-tables/update": (ctx) =>
+    import("./pages/data-tables/update.js").then((m) =>
+      m.render(ctx),
+    ),
 };
 
 /**
