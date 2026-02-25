@@ -968,6 +968,97 @@ body {
   padding-left: 32px;
 }
 
+/* ── Data Tables ──────────────────────────────────────── */
+.dt-update {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.dt-list-card {
+  min-height: 80px;
+}
+
+.dt-spinner {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 12px 0;
+}
+
+.dt-empty {
+  padding: 12px 0;
+}
+
+.dt-error {
+  color: #ef4444;
+  padding: 12px 0;
+}
+
+.dt-table-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dt-table-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.dt-table-item:hover {
+  background: rgba(255,255,255,0.04);
+}
+.dt-table-item--active {
+  background: rgba(59,130,246,0.10);
+  border: 1px solid rgba(59,130,246,0.25);
+}
+
+.dt-table-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.dt-table-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dt-table-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.dt-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.dt-badge--edit {
+  color: #22c55e;
+  background: rgba(34,197,94,0.12);
+}
+.dt-badge--view {
+  color: #f59e0b;
+  background: rgba(245,158,11,0.12);
+}
+
 /* ═══════════════════════════════════════════════════════════
    Light-mode overrides  (follows browser / OS preference)
    ═══════════════════════════════════════════════════════════ */
@@ -1170,5 +1261,25 @@ body {
   .checklist-drilldown__item--unticked {
     background: rgba(202,138,4,0.06);
     border-color: rgba(202,138,4,0.12);
+  }
+
+  /* ── Data Tables ────────────────────────────────────── */
+  .dt-table-item:hover {
+    background: rgba(0,0,0,0.04);
+  }
+  .dt-table-item--active {
+    background: rgba(59,130,246,0.08);
+    border-color: rgba(59,130,246,0.20);
+  }
+  .dt-badge--edit {
+    color: #16a34a;
+    background: rgba(22,163,74,0.10);
+  }
+  .dt-badge--view {
+    color: #ca8a04;
+    background: rgba(202,138,4,0.10);
+  }
+  .dt-error {
+    color: #dc2626;
   }
 }
