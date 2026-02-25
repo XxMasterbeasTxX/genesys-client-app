@@ -152,5 +152,96 @@ export function createApiClient(getAccessToken) {
       request(
         `/api/v2/conversations/${conversationId}/communications/${communicationId}/agentchecklists`,
       ),
+
+    // ── Data Tables ─────────────────────────────────────────────
+    /** Fetch ALL data tables the user can view (auto-paginated, with schema). */
+    getDataTables: async () => {
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+      while (all.length < total) {
+        const qs = new URLSearchParams({
+          pageNumber: page,
+          pageSize: 25,
+          expand: "schema",
+        });
+        const res = await request(`/api/v2/flows/datatables?${qs}`);
+        total = res.total ?? res.entities?.length ?? 0;
+        if (res.entities) all.push(...res.entities);
+        if (!res.entities?.length) break;
+        page++;
+      }
+      return all;
+    },
+
+    /** Fetch a single data table with its JSON Schema. */
+    getDataTable: (datatableId) =>
+      request(`/api/v2/flows/datatables/${datatableId}?expand=schema`),
+
+    /**
+     * Fetch ALL rows of a data table (auto-paginated, 500 rows/page).
+     * Always returns the complete row set regardless of table size.
+     */
+    getDataTableRows: async (datatableId) => {
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+      while (all.length < total) {
+        const qs = new URLSearchParams({
+          pageNumber: page,
+          pageSize: 500,
+          showbrief: false,
+        });
+        const res = await request(
+          `/api/v2/flows/datatables/${datatableId}/rows?${qs}`,
+        );
+        total = res.total ?? res.entities?.length ?? 0;
+        if (res.entities) all.push(...res.entities);
+        if (!res.entities?.length) break;
+        page++;
+      }
+      return all;
+    },
+
+    /**
+     * Look up a single row by its exact key value.
+     * Returns the row object, or null if not found (404).
+     */
+    lookupDataTableRow: async (datatableId, keyValue) => {
+      try {
+        return await request(
+          `/api/v2/flows/datatables/${datatableId}/rows/${encodeURIComponent(keyValue)}?showbrief=false`,
+        );
+      } catch (err) {
+        if (err.message?.includes("404")) return null;
+        throw err;
+      }
+    },
+
+    /** Update an existing row (PUT). Key must appear in body. */
+    updateDataTableRow: (datatableId, rowId, body) =>
+      request(
+        `/api/v2/flows/datatables/${datatableId}/rows/${encodeURIComponent(rowId)}`,
+        { method: "PUT", body },
+      ),
+
+    /** Create a new row (POST). */
+    createDataTableRow: (datatableId, body) =>
+      request(`/api/v2/flows/datatables/${datatableId}/rows`, {
+        method: "POST",
+        body,
+      }),
+
+    /** Delete a row by key. */
+    deleteDataTableRow: (datatableId, rowId) =>
+      request(
+        `/api/v2/flows/datatables/${datatableId}/rows/${encodeURIComponent(rowId)}`,
+        { method: "DELETE" },
+      ),
+
+    // ── User Permissions ────────────────────────────────────────
+    /** Fetch current user with full authorization grants (for permission detection). */
+    getUsersMeWithAuth: () =>
+      request("/api/v2/users/me?expand=authorization"),
   };
 }
