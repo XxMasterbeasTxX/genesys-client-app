@@ -36,33 +36,88 @@ export const SUPERVISOR_MODE = false;
  * Column rule shape:
  * {
  *   type: "string" | "integer" | "number" | "boolean" | "queue" | "skill"
- *         | "language" | "wrapupCode" | "enum" | "phone" | "email" | "url",
+ *         | "language" | "wrapupCode" | "enum" | "datatable"
+ *         | "phone" | "email" | "url",
  *   required:  boolean,
- *   min:       number,      // integer / number
- *   max:       number,      // integer / number
- *   minLength: number,      // string
- *   maxLength: number,      // string
- *   pattern:   string,      // regex (string)
- *   options:   string[],    // enum
- *   storeAs:   "name"|"id", // queue/skill/language — what value to write
+ *   min:       number,         // integer / number
+ *   max:       number,         // integer / number
+ *   minLength: number,         // string
+ *   maxLength: number,         // string
+ *   pattern:   string,         // regex (string)
+ *   options:   string[],       // enum
+ *   storeAs:   "name"|"id",    // queue/skill/language — what value to write
+ *   datatableId:   string,     // datatable — UUID of source table (preferred)
+ *   datatableName: string,     // datatable — table name fallback
  * }
  */
 export const TABLE_CONFIGS = [
-  // ── Example entries (update with your real tables) ──────────
-  // {
-  //   tableName: "Queue Routing Config",
-  //   validation: true,
-  //   supervisorEditableFields: ["priority", "enabled"],
-  //   columns: {
-  //     targetQueue: { type: "queue", required: true, storeAs: "name" },
-  //     priority:    { type: "integer", min: 1, max: 10, required: true },
-  //     enabled:     { type: "boolean" },
-  //   },
-  // },
-  // {
-  //   tableName: "Phrases",
-  //   validation: false,
-  // },
+  {
+    tableName: "Demo - Voice - Functions",
+    validation: true,
+    supervisorEditableFields: [
+      "Welcome",
+      "Offer Language",
+      "Recording",
+      "Survey",
+      "Callback",
+      "Danish",
+      "English",
+    ],
+    columns: {
+      // ─── String fields ───────────────────────────────────
+      "Brand": {
+        type: "enum",
+        required: true,
+        options: ["TDC Erhverv", "Nuuday", "YouSee"],
+      },
+      "Queue - Name": {
+        type: "queue",
+        required: true,
+        storeAs: "name",
+      },
+      "Skill - Name": {
+        type: "skill",
+        storeAs: "name",
+      },
+      "IVR Menu - Name": {
+        type: "datatable",
+        datatableName: "IVR Menus",
+      },
+
+      // ─── Integer fields ──────────────────────────────────
+      "Survey - Threshold": {
+        type: "integer",
+        min: 0,
+        max: 100,
+      },
+      "Number In Queue": {
+        type: "integer",
+        min: 0,
+        max: 50,
+      },
+
+      // ─── Boolean fields ──────────────────────────────────
+      "Welcome":                { type: "boolean" },
+      "Offer Language":         { type: "boolean" },
+      "Adhoc - Before menu":    { type: "boolean" },
+      "Adhoc - After menu":     { type: "boolean" },
+      "Recording":              { type: "boolean" },
+      "Enter CPR":              { type: "boolean" },
+      "IVR Menu":               { type: "boolean" },
+      "Survey":                 { type: "boolean" },
+      "Survey - Email":         { type: "boolean" },
+      "Survey - SMS":           { type: "boolean" },
+      "Survey - Voice":         { type: "boolean" },
+      "Estimated Waiting Time": { type: "boolean" },
+      "Callback":               { type: "boolean" },
+      "Queue Message 1":        { type: "boolean" },
+      "Queue Message 2":        { type: "boolean" },
+      "Danish":                 { type: "boolean" },
+      "English":                { type: "boolean" },
+      "Close callback":         { type: "boolean" },
+      "Speech Recognition":     { type: "boolean" },
+    },
+  },
 ];
 
 /**
@@ -152,6 +207,9 @@ export const API_DROPDOWN_TYPES = new Set([
   "wrapupCode",
 ]);
 
+/** Column type that renders as a dropdown populated from another data table's keys. */
+export const DATATABLE_TYPE = "datatable";
+
 /** Column types that render as static enum dropdowns. */
 export const ENUM_TYPE = "enum";
 
@@ -238,6 +296,11 @@ export function validateCell(value, col, rule, validOptions = null) {
     case "wrapupCode":
       if (validOptions && !validOptions.has(String(value))) {
         return `Invalid ${effectiveType} — not found.`;
+      }
+      break;
+    case "datatable":
+      if (validOptions && !validOptions.has(String(value))) {
+        return "Value not found in the linked data table.";
       }
       break;
   }

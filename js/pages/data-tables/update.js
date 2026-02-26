@@ -13,6 +13,7 @@ import {
   getColumnRule,
   validateCell,
   API_DROPDOWN_TYPES,
+  DATATABLE_TYPE,
   ENUM_TYPE,
 } from "./dataTablesConfig.js";
 
@@ -165,7 +166,7 @@ function valuesEqual(a, b) {
 
 /**
  * Cache of API-backed dropdown options.
- * Key: "queue"|"skill"|"language"|"wrapupCode"  →  [{ id, name }]
+ * Key: "queue"|"skill"|"language"|"wrapupCode"|"datatable:<id>"  →  [{ id, name }]
  * Prevents redundant API calls across table switches.
  */
 const dropdownCache = new Map();
@@ -173,9 +174,12 @@ const dropdownCache = new Map();
 /**
  * Fetch (or return cached) dropdown options for an API type.
  * Returns [{ id, name }]. Caches per-type across the session.
+ *
+ * For "datatable" type, pass the source data table's ID as `datatableId`.
  */
-async function fetchDropdownOptions(api, type) {
-  if (dropdownCache.has(type)) return dropdownCache.get(type);
+async function fetchDropdownOptions(api, type, datatableId) {
+  const cacheKey = type === "datatable" ? `datatable:${datatableId}` : type;
+  if (dropdownCache.has(cacheKey)) return dropdownCache.get(cacheKey);
 
   let items = [];
   try {
@@ -184,13 +188,23 @@ async function fetchDropdownOptions(api, type) {
       case "skill":      items = await api.getAllSkills(); break;
       case "language":   items = await api.getAllLanguages(); break;
       case "wrapupCode": items = await api.getAllWrapupCodes(); break;
+      case "datatable": {
+        if (!datatableId) break;
+        const rows = await api.getDataTableRows(datatableId);
+        // Each row's "key" field is the lookup value
+        const opts = rows
+          .map((r) => ({ id: r.key, name: r.key }))
+          .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+        dropdownCache.set(cacheKey, opts);
+        return opts;
+      }
     }
   } catch { /* swallow — will show empty options */ }
 
   // Normalise to { id, name }
   const opts = items.map((i) => ({ id: i.id, name: i.name }));
   opts.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-  dropdownCache.set(type, opts);
+  dropdownCache.set(cacheKey, opts);
   return opts;
 }
 
@@ -536,6 +550,28 @@ export async function render({ api }) {
               dropdownOptions.set(col.id, { options: opts, validSet, storeAs });
             }),
           );
+        } else if (rule.type === DATATABLE_TYPE) {
+          // Resolve data table ID from rule config
+          let srcId = rule.datatableId ?? null;
+          if (!srcId && rule.datatableName) {
+            // Look up by name (case-insensitive) from the loaded tables list
+            const match = [...tableMap.values()].find(
+              (t) => t.name.toLowerCase() === rule.datatableName.toLowerCase(),
+            );
+            if (match) srcId = match.id;
+          }
+          if (srcId) {
+            fetches.push(
+              fetchDropdownOptions(api, "datatable", srcId).then((opts) => {
+                const validSet = new Set(opts.map((o) => String(o.name)));
+                dropdownOptions.set(col.id, {
+                  options: opts,
+                  validSet,
+                  storeAs: "name",
+                });
+              }),
+            );
+          }
         } else if (rule.type === ENUM_TYPE && rule.options?.length) {
           const validSet = new Set(rule.options.map(String));
           dropdownOptions.set(col.id, {
@@ -756,7 +792,7 @@ export async function render({ api }) {
             const colRule = getColumnRule(tableMap.get(currentTableId), col.id);
             const isDropdown =
               colRule &&
-              (API_DROPDOWN_TYPES.has(colRule.type) || colRule.type === ENUM_TYPE);
+              (API_DROPDOWN_TYPES.has(colRule.type) || colRule.type === ENUM_TYPE || colRule.type === DATATABLE_TYPE);
 
             if (cellEditable) {
               td.classList.add("dt-td--editable");
