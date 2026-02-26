@@ -191,12 +191,10 @@ async function fetchDropdownOptions(api, type, datatableId) {
       case "datatable": {
         if (!datatableId) break;
         const rows = await api.getDataTableRows(datatableId);
-        // Each row's "key" field is the lookup value
-        const opts = rows
-          .map((r) => ({ id: r.key, name: r.key }))
-          .sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-        dropdownCache.set(cacheKey, opts);
-        return opts;
+        // Normalise rows to { id, name } using the key field
+        items = rows.map((r) => ({ id: r.key, name: r.key }));
+        console.log("[DataTable lookup] keys fetched:", items.map((i) => JSON.stringify(i.name)));
+        break;
       }
     }
   } catch { /* swallow — will show empty options */ }
@@ -829,16 +827,35 @@ export async function render({ api }) {
                 sel.append(placeholder);
 
                 const normalised = String(displayValue ?? "").trim();
+                let matched = false;
                 for (const opt of optsEntry.options) {
                   const o = document.createElement("option");
                   const storeVal = String(opt[optsEntry.storeAs] ?? opt.name);
                   o.value = storeVal;
                   o.textContent = opt.name;
-                  if (normalised === storeVal.trim()) o.selected = true;
+                  if (normalised === storeVal.trim()) {
+                    o.selected = true;
+                    matched = true;
+                  }
                   sel.append(o);
                 }
 
-                // Belt-and-suspenders: set value explicitly after all options exist
+                // Debug: log mismatch to help identify value discrepancies
+                if (normalised && !matched) {
+                  console.warn(
+                    `[Dropdown mismatch] col="${col.id}" value=${JSON.stringify(displayValue)}`,
+                    `normalised=${JSON.stringify(normalised)}`,
+                    `options=${JSON.stringify(optsEntry.options.map((o) => o[optsEntry.storeAs] ?? o.name))}`,
+                  );
+                  // Add current value as a fallback option so it's visible
+                  const extra = document.createElement("option");
+                  extra.value = normalised;
+                  extra.textContent = `${normalised} ⚠️`;
+                  extra.selected = true;
+                  sel.insertBefore(extra, sel.children[1]); // after placeholder
+                }
+
+                // Set value explicitly after all options exist
                 if (normalised) sel.value = normalised;
 
                 sel.addEventListener("change", () => {
