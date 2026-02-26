@@ -184,10 +184,12 @@ async function fetchDropdownOptions(api, type, datatableId) {
   let items = [];
   try {
     switch (type) {
-      case "queue":      items = await api.getAllQueues(); break;
-      case "skill":      items = await api.getAllSkills(); break;
-      case "language":   items = await api.getAllLanguages(); break;
-      case "wrapupCode": items = await api.getAllWrapupCodes(); break;
+      case "queue":          items = await api.getAllQueues(); break;
+      case "skill":          items = await api.getAllSkills(); break;
+      case "language":       items = await api.getAllLanguages(); break;
+      case "wrapupCode":     items = await api.getAllWrapupCodes(); break;
+      case "schedule":       items = await api.getAllSchedules(); break;
+      case "scheduleGroup": items = await api.getAllScheduleGroups(); break;
       case "datatable": {
         if (!datatableId) break;
         const rows = await api.getDataTableRows(datatableId);

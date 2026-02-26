@@ -40,9 +40,11 @@
  *   "queue"      Pick from Genesys queues           <select> dropdown (API)
  *   "skill"      Pick from Genesys skills           <select> dropdown (API)
  *   "language"   Pick from Genesys languages        <select> dropdown (API)
- *   "wrapupCode" Pick from Genesys wrap-up codes    <select> dropdown (API)
- *   "datatable"  Pick from another data table's keys <select> dropdown (API)
- *   "phone"      Phone number (basic validation)    Text input
+ *   "wrapupCode"     Pick from Genesys wrap-up codes    <select> dropdown (API)
+ *   "datatable"      Pick from another data table's keys <select> dropdown (API)
+ *   "schedule"       Pick from Architect schedules       <select> dropdown (API)
+ *   "scheduleGroup"  Pick from Architect schedule groups <select> dropdown (API)
+ *   "phone"          Phone number (basic validation)    Text input
  *   "email"      Email address                      Text input
  *   "url"        URL                                Text input
  *
@@ -53,7 +55,7 @@
  *     maxLength  : number    — maximum string length
  *     pattern    : string    — regex the value must match
  *     options    : string[]  — allowed values for "enum" type
- *     storeAs    : "name"|"id" — for queue/skill/language/wrapupCode:
+ *     storeAs    : "name"|"id" — for queue/skill/language/wrapupCode/schedule/scheduleGroup:
  *                                what value gets written to the table
  *     datatableId  : string  — for "datatable" type: UUID of the source table
  *     datatableName: string  — for "datatable" type: name fallback (case-insensitive)
@@ -153,6 +155,20 @@ const EXAMPLE_CONFIG = {
       // datatableId: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", // preferred
       datatableName: "IVR Menus", // fallback — matches by name
     },
+
+    // "Schedule - Name" — pick from Architect schedules → API dropdown
+    //   Uses GET /api/v2/architect/schedules (requires "architect" OAuth scope).
+    // "Schedule - Name": {
+    //   type: "schedule",
+    //   storeAs: "name", // or "id" to store the UUID
+    // },
+
+    // "Schedule Group - Name" — pick from Architect schedule groups → API dropdown
+    //   Uses GET /api/v2/architect/schedulegroups (requires "architect" OAuth scope).
+    // "Schedule Group - Name": {
+    //   type: "scheduleGroup",
+    //   storeAs: "name", // or "id" to store the UUID
+    // },
 
     // ─── Integer fields ──────────────────────────────────
 

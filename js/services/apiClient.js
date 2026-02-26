@@ -308,5 +308,37 @@ export function createApiClient(getAccessToken) {
       }
       return all;
     },
+
+    /** Fetch ALL architect schedules (auto-paginated). Returns [{ id, name, … }]. */
+    getAllSchedules: async () => {
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+      while (all.length < total) {
+        const qs = new URLSearchParams({ pageNumber: page, pageSize: 500 });
+        const res = await request(`/api/v2/architect/schedules?${qs}`);
+        total = res.total ?? res.entities?.length ?? 0;
+        if (res.entities) all.push(...res.entities);
+        if (!res.entities?.length) break;
+        page++;
+      }
+      return all;
+    },
+
+    /** Fetch ALL architect schedule groups (auto-paginated). Returns [{ id, name, … }]. */
+    getAllScheduleGroups: async () => {
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+      while (all.length < total) {
+        const qs = new URLSearchParams({ pageNumber: page, pageSize: 500 });
+        const res = await request(`/api/v2/architect/schedulegroups?${qs}`);
+        total = res.total ?? res.entities?.length ?? 0;
+        if (res.entities) all.push(...res.entities);
+        if (!res.entities?.length) break;
+        page++;
+      }
+      return all;
+    },
   };
 }

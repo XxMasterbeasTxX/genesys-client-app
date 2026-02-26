@@ -37,6 +37,7 @@ export const SUPERVISOR_MODE = false;
  * {
  *   type: "string" | "integer" | "number" | "boolean" | "queue" | "skill"
  *         | "language" | "wrapupCode" | "enum" | "datatable"
+ *         | "schedule" | "scheduleGroup"
  *         | "phone" | "email" | "url",
  *   required:  boolean,
  *   min:       number,         // integer / number
@@ -205,6 +206,8 @@ export const API_DROPDOWN_TYPES = new Set([
   "skill",
   "language",
   "wrapupCode",
+  "schedule",
+  "scheduleGroup",
 ]);
 
 /** Column type that renders as a dropdown populated from another data table's keys. */
@@ -294,6 +297,8 @@ export function validateCell(value, col, rule, validOptions = null) {
     case "skill":
     case "language":
     case "wrapupCode":
+    case "schedule":
+    case "scheduleGroup":
       if (validOptions && !validOptions.has(String(value))) {
         return `Invalid ${effectiveType} — not found.`;
       }
