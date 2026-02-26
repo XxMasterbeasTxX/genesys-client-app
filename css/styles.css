@@ -968,6 +968,60 @@ body {
   padding-left: 32px;
 }
 
+/* ── Conversation Summaries (inside drill-down) ───────── */
+.checklist-drilldown__sum-heading {
+  margin: 20px 0 8px;
+  font-size: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+
+.checklist-drilldown__summary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.checklist-drilldown__sum-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.checklist-drilldown__sum-headline {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.checklist-drilldown__sum-field {
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 4px;
+}
+
+.checklist-drilldown__sum-text {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border-radius: 6px;
+  white-space: pre-wrap;
+}
+
+.checklist-drilldown__sum-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+
 /* ── Data Tables ──────────────────────────────────────── */
 .dt-update {
   display: flex;

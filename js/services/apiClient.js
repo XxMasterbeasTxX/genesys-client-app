@@ -153,6 +153,10 @@ export function createApiClient(getAccessToken) {
         `/api/v2/conversations/${conversationId}/communications/${communicationId}/agentchecklists`,
       ),
 
+    /** Fetch conversation summaries (may contain multiple entities). */
+    getConversationSummaries: (conversationId) =>
+      request(`/api/v2/conversations/${conversationId}/summaries`),
+
     // ── Data Tables ─────────────────────────────────────────────
     /** Fetch ALL data tables the user can view (auto-paginated, with schema). */
     getDataTables: async () => {

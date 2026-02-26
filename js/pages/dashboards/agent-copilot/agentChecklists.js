@@ -777,16 +777,34 @@ export async function render({ route, me, api }) {
         MEDIA_KEYS.flatMap((k) => (p[k] ?? []).map((c) => c.id)),
       );
       if (!commIds.length) {
+        // Still fetch summaries even when no agent communications
+        let summaries = [];
+        try {
+          const sumRes = await api.getConversationSummaries(convId);
+          if (Array.isArray(sumRes?.entities)) summaries = sumRes.entities;
+          else if (Array.isArray(sumRes)) summaries = sumRes;
+        } catch (_) { /* no summaries */ }
         enriched.set(convId, {
           checklists: [],
           communicationId: null,
           completion: null,
+          summaries,
         });
         updateRowEnrichment(convId);
         return;
       }
 
-      // Step 2: Try each communication until we find checklists
+      // Step 2: Fetch conversation summaries in parallel with checklists
+      let summaries = [];
+      try {
+        const sumRes = await api.getConversationSummaries(convId);
+        if (Array.isArray(sumRes?.entities)) summaries = sumRes.entities;
+        else if (Array.isArray(sumRes)) summaries = sumRes;
+      } catch (sumErr) {
+        console.debug(`[Summaries] No summaries for ${convId}:`, sumErr.message ?? sumErr);
+      }
+
+      // Step 3: Try each communication until we find checklists
       for (const commId of commIds) {
         try {
           const checklistRes = await api.getConversationChecklists(convId, commId);
@@ -805,7 +823,7 @@ export async function render({ route, me, api }) {
 
           if (list.length) {
             const completion = checklistCompletion(list);
-            enriched.set(convId, { checklists: list, communicationId: commId, completion });
+            enriched.set(convId, { checklists: list, communicationId: commId, completion, summaries });
             updateRowEnrichment(convId);
             return;
           }
@@ -820,6 +838,7 @@ export async function render({ route, me, api }) {
         checklists: [],
         communicationId: commIds[0],
         completion: null,
+        summaries,
       });
       updateRowEnrichment(convId);
     } catch (err) {
@@ -828,6 +847,7 @@ export async function render({ route, me, api }) {
         checklists: [],
         communicationId: null,
         completion: null,
+        summaries: [],
       });
       updateRowEnrichment(convId);
     }
@@ -972,15 +992,18 @@ export async function render({ route, me, api }) {
     highlightRow(convId);
 
     const info = enriched.get(convId);
-    if (!info || !info.checklists?.length) {
+    const hasChecklists = info?.checklists?.length > 0;
+    const hasSummaries = info?.summaries?.length > 0;
+
+    if (!info || (!hasChecklists && !hasSummaries)) {
       drillPanel.hidden = false;
       drillPanel.innerHTML = `
         <div class="checklist-drilldown__header">
-          <h3>Checklist Detail</h3>
+          <h3>Interaction Detail</h3>
           <button type="button" class="btn btn-sm checklist-drilldown__close">✕</button>
         </div>
         <p class="checklist-drilldown__empty">
-          ${info ? "No checklist data for this interaction." : "Still loading checklist data…"}
+          ${info ? "No checklist or summary data for this interaction." : "Still loading data…"}
         </p>
       `;
       drillPanel
@@ -993,7 +1016,7 @@ export async function render({ route, me, api }) {
       return;
     }
 
-    renderDrillDown(info.checklists);
+    renderDrillDown(info.checklists, info.summaries ?? []);
   }
 
   function highlightRow(convId) {
@@ -1005,7 +1028,7 @@ export async function render({ route, me, api }) {
     }
   }
 
-  function renderDrillDown(checklists) {
+  function renderDrillDown(checklists, summaries) {
     drillPanel.hidden = false;
     drillPanel.innerHTML = "";
 
@@ -1013,7 +1036,7 @@ export async function render({ route, me, api }) {
     const hdr = document.createElement("div");
     hdr.className = "checklist-drilldown__header";
     const h3 = document.createElement("h3");
-    h3.textContent = "Checklist Detail";
+    h3.textContent = "Interaction Detail";
     const closeBtn = document.createElement("button");
     closeBtn.type = "button";
     closeBtn.className = "btn btn-sm checklist-drilldown__close";
@@ -1084,6 +1107,74 @@ export async function render({ route, me, api }) {
 
       section.append(itemList);
       drillPanel.append(section);
+    }
+
+    // ── Conversation Summaries ──────────────────────────
+    if (summaries.length) {
+      const sumHeader = document.createElement("h3");
+      sumHeader.className = "checklist-drilldown__sum-heading";
+      sumHeader.textContent = summaries.length === 1
+        ? "Conversation Summary"
+        : `Conversation Summaries (${summaries.length})`;
+      drillPanel.append(sumHeader);
+
+      summaries.forEach((s, idx) => {
+        const card = document.createElement("div");
+        card.className = "checklist-drilldown__summary";
+
+        // If multiple summaries, show an index label
+        if (summaries.length > 1) {
+          const label = document.createElement("div");
+          label.className = "checklist-drilldown__sum-label";
+          label.textContent = `Summary ${idx + 1} of ${summaries.length}`;
+          card.append(label);
+        }
+
+        // Headline
+        if (s.headline?.text) {
+          const hl = document.createElement("div");
+          hl.className = "checklist-drilldown__sum-headline";
+          hl.textContent = s.headline.text;
+          card.append(hl);
+        }
+
+        // Reason
+        if (s.reason?.text) {
+          const r = document.createElement("div");
+          r.className = "checklist-drilldown__sum-field";
+          r.innerHTML = `<strong>Reason:</strong> ${escapeHtml(s.reason.text)}`;
+          card.append(r);
+        }
+
+        // Resolution
+        if (s.resolution?.text) {
+          const r = document.createElement("div");
+          r.className = "checklist-drilldown__sum-field";
+          r.innerHTML = `<strong>Resolution:</strong> ${escapeHtml(s.resolution.text)}`;
+          card.append(r);
+        }
+
+        // Full text (wrap-up)
+        if (s.text?.text) {
+          const t = document.createElement("div");
+          t.className = "checklist-drilldown__sum-text";
+          t.textContent = s.text.text;
+          card.append(t);
+        }
+
+        // Confidence & status
+        const meta = document.createElement("div");
+        meta.className = "checklist-drilldown__sum-meta";
+        const metaParts = [];
+        if (s.status) metaParts.push(`Status: ${s.status}`);
+        if (s.confidence != null) metaParts.push(`Confidence: ${(s.confidence * 100).toFixed(0)}%`);
+        if (metaParts.length) {
+          meta.textContent = metaParts.join(" · ");
+          card.append(meta);
+        }
+
+        drillPanel.append(card);
+      });
     }
   }
 
