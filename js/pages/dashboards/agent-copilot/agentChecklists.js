@@ -1145,7 +1145,6 @@ export async function render({ route, me, api }) {
       drillPanel.append(sumHeader);
 
       summaries.forEach((s, idx) => {
-        console.log(`[Summaries] Summary ${idx}:`, JSON.stringify(s, null, 2));
         const card = document.createElement("div");
         card.className = "checklist-drilldown__summary";
 

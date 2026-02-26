@@ -86,9 +86,11 @@ This client authenticates users via the browser using Authorization Code + PKCE.
 2. Under **Roles**, assign the roles needed for the features being used:
    - **Telephony** → needed for trunk activity/history dashboards
    - **Analytics** → `analytics:conversationDetail:view` — needed for Agent Copilot Checklists (conversation detail queries)
-   - **Conversation** → `conversation:communication:view` — needed to fetch conversation participants and checklist data
+   - **Conversation** → `conversation:communication:view` — needed to fetch conversation participants and checklist data; `conversation:summary:view` — needed to display AI-generated conversation summaries
    - **Assistants** → `assistants:assistant:view`, `assistants:queue:view` — needed to list copilot assistants and their queue assignments
    - **Routing** → `routing:queue:view`, `routing:queue:member:view` — needed to resolve queue names and list queue members for the agent filter
+   - **Architect** → `architect:schedule:view`, `architect:scheduleGroup:view` — needed for Data Tables columns that use schedule/scheduleGroup dropdowns
+   - **Data Tables** → `architect:datatable:view`, `architect:datatable:edit` — needed for the Data Tables Update feature (reading schemas, reading rows, and writing cell values)
    - Additional roles depending on which dashboard pages are enabled
 
 3. Click **Save**
@@ -406,6 +408,37 @@ These files contain customer-tunable settings. Adjust as needed:
 | `EXPORT_ITEM_COLS` | 7 columns | Column widths for Sheet 2 (Checklist Items) |
 | `LABELS` | Various | All UI button text, badge labels, and chart axis labels |
 
+**`js/pages/data-tables/dataTablesConfig.js`** — Data Tables Update:
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `SUPERVISOR_MODE` | `false` | When `true`, only fields listed in `supervisorEditableFields` are editable; all others are read-only. When `false` (Administrator mode), all non-key fields are editable. |
+| `TABLE_CONFIGS` | `[...]` | Array of per-table configuration objects. Each entry can specify `tableId` or `tableName`, `validation` (boolean), `supervisorEditableFields` (string array), and `columns` (per-column validation rules). |
+
+Column validation types:
+
+| Type | Description | Renders as |
+| --- | --- | --- |
+| `string` | Free text | Text input |
+| `integer` | Whole number | Number input (step=1) |
+| `number` | Decimal number | Number input |
+| `boolean` | True / false | Checkbox |
+| `enum` | Static list of options | Dropdown |
+| `queue` | Genesys Cloud queues | Searchable dropdown (API) |
+| `skill` | Genesys Cloud skills | Searchable dropdown (API) |
+| `language` | Genesys Cloud languages | Searchable dropdown (API) |
+| `wrapupCode` | Genesys Cloud wrap-up codes | Searchable dropdown (API) |
+| `datatable` | Another data table’s row keys | Searchable dropdown (API) |
+| `schedule` | Architect schedules | Searchable dropdown (API) |
+| `scheduleGroup` | Architect schedule groups | Searchable dropdown (API) |
+| `phone` | Phone number | Text input (validated) |
+| `email` | Email address | Text input (validated) |
+| `url` | URL | Text input (validated) |
+
+Additional column rule properties: `required`, `min`, `max`, `minLength`, `maxLength`, `pattern` (regex), `options` (for enum), `storeAs` (`"name"` or `"id"` for API dropdowns), `datatableId`/`datatableName` (for datatable lookups).
+
+See `dataTablesConfig.example.js` for a fully documented example configuration.
+
 ### 7.3 Collection Interval — `api/collectTrunkMetrics/function.json`
 
 The timer schedule controls how often trunk metrics are collected:
@@ -565,11 +598,23 @@ Run through these checks after deployment:
   - [ ] Click a period preset or set custom dates (max 31 days) and click Search
   - [ ] Confirm interactions appear and enrich with checklist data
   - [ ] Click a row with a checklist → verify drill-down shows checklist items with tick status
+  - [ ] If the conversation has an AI-generated summary, verify it appears below the checklist items in the drill-down panel (showing headline, reason, resolution, full text)
+  - [ ] For transferred calls, verify multiple summaries are shown ("Summary 1 of N")
   - [ ] Test status filter buttons (All / Completed / Incomplete)
   - [ ] Verify the completion bar chart appears above the table showing Complete vs Incomplete counts
   - [ ] After enrichment completes, verify the **⬇ Export Excel** button appears in the top-right header
   - [ ] Click Export Excel → a new tab opens with a Save button → click Save → verify a two-sheet XLSX downloads
   - [ ] If pop-ups are blocked, allow pop-ups for the site and retry
+- [ ] Navigate to **Data Tables → Update**:
+  - [ ] Verify the table selector dropdown lists available data tables
+  - [ ] Select a table → verify rows load with column headers matching the table schema
+  - [ ] Use the search/filter bar to filter rows by keyword
+  - [ ] Edit a cell → verify it highlights as dirty (unsaved changes)
+  - [ ] For API-backed dropdowns (queue, skill, language, etc.) → verify the searchable dropdown loads options from the API
+  - [ ] Click Save on a dirty row → verify changes persist (re-open the row to confirm)
+  - [ ] Click Discard on a dirty row → verify the cell reverts to its original value
+  - [ ] Test Discard All → verify all dirty cells revert
+  - [ ] If `SUPERVISOR_MODE = true`, verify non-listed fields are read-only
 
 ### Backend
 
@@ -718,6 +763,32 @@ To embed the app inside the Genesys Cloud client interface:
 
 - **Cause**: No enriched checklist data yet, or Chart.js not loaded
 - **Fix**: The chart only appears after at least one interaction has been enriched with checklist data. Verify Chart.js loads from the CDN (`cdn.jsdelivr.net/npm/chart.js@4`). Chart styling can be adjusted in `CHART_CONFIG` within `checklistConfig.js`; chart container sizing is in `css/styles.css` (`.checklist-chart-wrap`).
+
+### Agent Checklists — conversation summary not showing
+
+- **Cause**: The conversation has no AI-generated summary, or the user lacks the `conversation:summary:view` permission
+- **Fix**: Summaries are only generated for conversations where Agent Copilot is active and the conversation has ended. Check the browser DevTools console for `[Summaries]` log entries — a 404 means no summary exists for that conversation; a 403 means the permission is missing. Ensure the PKCE OAuth client’s role includes **Conversation** with `conversation:summary:view`.
+
+### Data Tables — "No tables found" or empty table selector
+
+- **Cause**: The OAuth client lacks `architect:datatable:view` permission, or no data tables exist in the org
+- **Fix**: Ensure the PKCE OAuth client has the **Architect** role with `architect:datatable:view`. Verify data tables exist in Genesys Admin → Architect → Data Tables.
+
+### Data Tables — dropdown column shows no options
+
+- **Cause**: Missing API permissions for the specific resource type (queue, skill, language, schedule, etc.)
+- **Fix**: Check the browser DevTools console for 403 errors when opening the dropdown. Add the corresponding role to the PKCE OAuth client:
+  - Queues: `routing:queue:view`
+  - Skills: `routing:skill:view`
+  - Languages: `routing:language:view`
+  - Wrap-up codes: `routing:wrapupCode:view`
+  - Schedules/Schedule Groups: `architect:schedule:view`, `architect:scheduleGroup:view`
+  - Data table lookups: `architect:datatable:view`
+
+### Data Tables — save fails with 403
+
+- **Cause**: The OAuth client lacks `architect:datatable:edit` permission
+- **Fix**: Ensure the PKCE OAuth client has the **Architect** role with `architect:datatable:edit` (or a custom role that includes data table write permissions).
 
 ---
 

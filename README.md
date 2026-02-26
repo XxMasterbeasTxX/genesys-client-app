@@ -18,6 +18,8 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 | **Trunk History** | Historical peak concurrent-call chart powered by an Azure Functions backend that collects metrics every minute (configurable). Preset and custom date-range picker, peak/avg stats cards, server-side aggregation (hourly/daily buckets with peak + avg lines) |
 | **Alert System** | Configurable call-count threshold with cooldown. When breached, executes Genesys Cloud Data Actions to send SMS notifications (Email placeholder ready). Per-channel fields (phone number, sender, message) configured from the in-app alert panel. Channel definitions driven by a shared backend config (`channelConfig.js`) — adding a new channel requires only a config entry. |
 | **Agent Copilot Checklists** | Historical view of interactions that used Agent Copilot checklists. Cascading multi-select filters (Copilot → Queue → Agent), configurable period selector with 31-day API limit validation, background enrichment with abort-on-re-search. Drill-down shows individual checklist items with agent/AI tick status. Status filtering (All / Completed / Incomplete) — "All" automatically hides interactions without checklist data. |
+| **Conversation Summaries** | Drill-down panel also displays AI-generated conversation summaries (headline, reason, resolution, full text, confidence). Supports multiple summaries per conversation (e.g. transferred calls). Summaries are fetched alongside checklists during enrichment and rendered below the checklist items. |
+| **Data Tables — Update** | Config-driven editor for Genesys Cloud Data Tables. Supports supervisor and administrator modes with per-field editability rules. Column types include free text, integer, number, boolean, enum (static list), and API-backed dropdowns for queues, skills, languages, wrap-up codes, schedules, schedule groups, and cross-table lookups. Features: searchable dropdown with full-text filtering, cell-level validation with inline error messages, dirty-cell tracking with save/discard per row or bulk discard all, and action buttons per row. Configuration lives in `dataTablesConfig.js` with a documented example file. |
 | **Completion Bar Chart** | Chart.js 4 bar chart showing Complete vs Incomplete counts for the currently filtered results. Positioned alongside the filter bar; colours, fonts, and sizing are all configurable in `checklistConfig.js`. |
 | **Excel Export** | Three-sheet XLSX export (Summary, Interactions, Checklist Items) powered by SheetJS. Works inside the cross-origin Genesys Cloud iframe via a `download.html` helper page that uses `showSaveFilePicker()` with a real user gesture. Column widths, filename prefix, and all labels are configurable in `checklistConfig.js`. |
 | **Light / Dark Theme** | Automatically follows the browser / OS colour scheme via `@media (prefers-color-scheme: light)`. All backgrounds, text, borders, badges, and chart metadata colours adapt instantly — no page reload needed. Chart.js instances re-render on theme change via a `matchMedia` listener. |
@@ -64,9 +66,13 @@ A single-page embedded application for **Genesys Cloud** built with vanilla Java
 │       ├── placeholder.js            # Stub for future pages
 │       └── dashboards/
 │           ├── agent-copilot/
-│           │   ├── agentChecklists.js    # Agent Copilot checklist history view
+│           │   ├── agentChecklists.js    # Agent Copilot checklists + summaries view
 │           │   ├── checklistConfig.js    # Feature-level tunables for checklists
 │           │   └── performance.js
+│           ├── data-tables/
+│           │   ├── update.js              # Data Table editor (search, edit, save)
+│           │   ├── dataTablesConfig.js     # Per-table validation rules & supervisor fields
+│           │   └── dataTablesConfig.example.js  # Documented example config
 │           └── trunks/
 │               ├── activity.js       # Live trunk activity dashboard
 │               ├── history.js        # Historical peak-call chart page
@@ -141,6 +147,7 @@ Configuration follows a **layered** approach designed to scale as the app grows:
 | `js/pages/dashboards/trunks/alertConfig.js` | Feature | Default threshold (0 = disabled), default cooldown (15 min) |
 | `js/pages/dashboards/trunks/historyConfig.js` | Feature | Default date range, chart max points, colours |
 | `js/pages/dashboards/agent-copilot/checklistConfig.js` | Feature | Date range presets, query page size, enrichment batch size, API constants, chart appearance, export settings, UI labels |
+| `js/pages/data-tables/dataTablesConfig.js` | Feature | Supervisor mode toggle, per-table column validation rules, supervisor-editable fields, API-backed dropdown types |
 | `api/shared/channelConfig.js` | Backend | Notification channel definitions (SMS action ID, fields, defaults) |
 
 Feature-level config files live alongside their feature code so new modules can follow the same pattern without bloating the global config.
