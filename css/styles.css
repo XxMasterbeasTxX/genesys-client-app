@@ -1217,6 +1217,132 @@ body {
   margin-left: 2px;
 }
 
+/* ── Inline editing ─────────────────────────────────────── */
+
+/* Dirty row highlight */
+.dt-tr--dirty {
+  background: rgba(59,130,246,0.06) !important;
+}
+
+/* Saving row dim */
+.dt-tr--saving {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Saved flash */
+.dt-tr--saved {
+  animation: dt-save-flash 1.5s ease;
+}
+@keyframes dt-save-flash {
+  0%   { background: rgba(34,197,94,0.18); }
+  100% { background: transparent; }
+}
+
+/* Editable cell cursor */
+.dt-td--editable {
+  cursor: pointer;
+  position: relative;
+}
+.dt-td--editable:hover {
+  background: rgba(59,130,246,0.08);
+}
+
+/* Changed cell marker */
+.dt-td--changed {
+  border-left: 2px solid #3b82f6;
+}
+
+/* Inline text / number input */
+.dt-cell-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid rgba(59,130,246,0.5);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+}
+.dt-cell-input:focus {
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.18);
+}
+
+/* Inline checkbox */
+.dt-cell-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+/* Cell display text in editable cells */
+.dt-cell-text {
+  display: inline-block;
+  width: 100%;
+}
+
+/* Actions column */
+.dt-th--actions {
+  text-align: center;
+  min-width: 120px;
+  cursor: default;
+}
+.dt-td--actions {
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Save / Discard buttons */
+.dt-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.dt-btn + .dt-btn {
+  margin-left: 4px;
+}
+.dt-btn--save {
+  color: #fff;
+  background: #22c55e;
+}
+.dt-btn--save:hover {
+  background: #16a34a;
+}
+.dt-btn--discard {
+  color: var(--muted);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+}
+.dt-btn--discard:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.10);
+}
+
+/* Saving label */
+.dt-saving-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Inline row error */
+.dt-row-error {
+  font-size: 12px;
+  padding: 6px 12px;
+  margin-top: 4px;
+  border-radius: 6px;
+  color: #ef4444;
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.18);
+}
+
 /* ═══════════════════════════════════════════════════════════
    Light-mode overrides  (follows browser / OS preference)
    ═══════════════════════════════════════════════════════════ */
@@ -1469,5 +1595,24 @@ body {
   }
   .dt-th--locked {
     color: #ca8a04;
+  }
+
+  /* Inline editing light overrides */
+  .dt-tr--dirty {
+    background: rgba(59,130,246,0.05) !important;
+  }
+  .dt-td--editable:hover {
+    background: rgba(59,130,246,0.06);
+  }
+  .dt-btn--discard {
+    background: rgba(0,0,0,0.04);
+  }
+  .dt-btn--discard:hover {
+    background: rgba(0,0,0,0.08);
+  }
+  .dt-row-error {
+    color: #dc2626;
+    background: rgba(220,38,38,0.06);
+    border-color: rgba(220,38,38,0.15);
   }
 }

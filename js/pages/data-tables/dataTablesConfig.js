@@ -15,7 +15,7 @@
  * When false (Administrator mode), all non-key fields are editable
  * (subject to the user's API permissions).
  */
-export const SUPERVISOR_MODE = true;
+export const SUPERVISOR_MODE = false;
 
 /**
  * Per-table configuration.

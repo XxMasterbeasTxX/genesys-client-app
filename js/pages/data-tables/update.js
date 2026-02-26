@@ -38,6 +38,13 @@ const LABELS = {
   lockTooltip: "This field is read-only in Supervisor Mode.",
   editableTooltip: "This field is editable.",
   keyTooltip: "The key column is always read-only.",
+  actions: "Actions",
+  save: "Save",
+  discard: "Discard",
+  saving: "Saving…",
+  saveSuccess: "Saved",
+  saveError: (msg) => `Save failed: ${msg}`,
+  unsavedChanges: "You have unsaved changes.",
 };
 
 /** Debounce delay for search input (ms). */
@@ -118,6 +125,32 @@ function formatCell(value, type) {
   if (value === null || value === undefined) return "—";
   if (type === "boolean") return value ? "✔" : "✘";
   return String(value);
+}
+
+/**
+ * Coerce an input string back to the correct JS type for the API.
+ */
+function coerceValue(raw, type) {
+  if (raw === "" || raw === null || raw === undefined) return null;
+  switch (type) {
+    case "boolean":
+      return raw === true || raw === "true";
+    case "integer":
+      return Number.isFinite(Number(raw)) ? Math.round(Number(raw)) : raw;
+    case "number":
+      return Number.isFinite(Number(raw)) ? Number(raw) : raw;
+    default:
+      return String(raw);
+  }
+}
+
+/**
+ * Deep-compare two values (primitive-level, sufficient for data table cells).
+ */
+function valuesEqual(a, b) {
+  if (a === b) return true;
+  if (a == null && b == null) return true;
+  return false;
 }
 
 /* ── Render ────────────────────────────────────────────── */
@@ -255,6 +288,52 @@ export async function render({ api }) {
     let readOnlyReason = null;
     let currentTableConfig = null;
 
+    /**
+     * Dirty row tracking.
+     * Map<rowKey, { original: object, edits: object }>
+     * `original` = snapshot at load time; `edits` = field→newValue overrides.
+     */
+    const dirtyRows = new Map();
+
+    /** Track rows currently being saved (Set of key strings). */
+    const savingRows = new Set();
+
+    function isDirty(rowKey) {
+      return dirtyRows.has(rowKey);
+    }
+
+    function getDirtyEdits(rowKey) {
+      return dirtyRows.get(rowKey)?.edits ?? {};
+    }
+
+    function markDirty(rowKey, colId, newValue, originalRow) {
+      if (!dirtyRows.has(rowKey)) {
+        // Snapshot the original row values
+        dirtyRows.set(rowKey, { original: { ...originalRow }, edits: {} });
+      }
+      const entry = dirtyRows.get(rowKey);
+      const orig = entry.original[colId];
+      // If value reverted to original, remove from edits
+      if (valuesEqual(newValue, orig)) {
+        delete entry.edits[colId];
+        // If no remaining edits, remove dirty entry entirely
+        if (!Object.keys(entry.edits).length) {
+          dirtyRows.delete(rowKey);
+        }
+      } else {
+        entry.edits[colId] = newValue;
+      }
+    }
+
+    function discardDirty(rowKey) {
+      dirtyRows.delete(rowKey);
+    }
+
+    function clearAllDirty() {
+      dirtyRows.clear();
+      savingRows.clear();
+    }
+
     async function loadTableRows(tableId) {
       currentTableId = tableId;
       const table = tableMap.get(tableId);
@@ -264,6 +343,7 @@ export async function render({ api }) {
       allRows = [];
       sortCol = "key";
       sortAsc = true;
+      clearAllDirty();
 
       // Editability
       const divisionId = table.division?.id ?? "";
@@ -422,6 +502,8 @@ export async function render({ api }) {
         }
         noMatch.style.display = "none";
 
+        const hasAnyEditable = editableFields.size > 0;
+
         const table = document.createElement("table");
         table.className = "dt-table";
 
@@ -480,31 +562,195 @@ export async function render({ api }) {
           });
           headRow.append(th);
         }
+
+        /* Actions column header (only when editable) */
+        if (hasAnyEditable) {
+          const thAct = document.createElement("th");
+          thAct.className = "dt-th dt-th--actions";
+          thAct.textContent = LABELS.actions;
+          headRow.append(thAct);
+        }
+
         thead.append(headRow);
         table.append(thead);
 
         // <tbody>
         const tbody = document.createElement("tbody");
         for (const row of visible) {
+          const rowKey = String(row.key ?? "");
+          const rowDirty = isDirty(rowKey);
+          const rowSaving = savingRows.has(rowKey);
+          const edits = getDirtyEdits(rowKey);
+
           const tr = document.createElement("tr");
           tr.className = "dt-tr";
+          tr.dataset.rowKey = rowKey;
+          if (rowDirty) tr.classList.add("dt-tr--dirty");
+          if (rowSaving) tr.classList.add("dt-tr--saving");
 
           for (const col of columns) {
             const td = document.createElement("td");
             td.className = "dt-td";
-            td.textContent = formatCell(row[col.id], col.type);
-            if (col.type === "boolean") {
-              td.classList.add(
-                row[col.id] ? "dt-bool--true" : "dt-bool--false",
-              );
+
+            const isKey = col.id === "key";
+            const cellEditable = !isKey && editableFields.has(col.id) && !rowSaving;
+
+            // Show edited value if dirty, else original
+            const displayValue = col.id in edits ? edits[col.id] : row[col.id];
+
+            if (cellEditable) {
+              td.classList.add("dt-td--editable");
+              if (col.id in edits) td.classList.add("dt-td--changed");
+
+              if (col.type === "boolean") {
+                // Boolean → checkbox
+                const cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.className = "dt-cell-checkbox";
+                cb.checked = displayValue === true || displayValue === "true";
+                cb.disabled = rowSaving;
+                cb.addEventListener("change", () => {
+                  const coerced = coerceValue(cb.checked, "boolean");
+                  markDirty(rowKey, col.id, coerced, row);
+                  renderTable();
+                });
+                td.append(cb);
+              } else {
+                // Text / number → click-to-edit
+                const span = document.createElement("span");
+                span.className = "dt-cell-text";
+                span.textContent = formatCell(displayValue, col.type);
+                td.append(span);
+
+                td.addEventListener("click", (e) => {
+                  if (e.target.tagName === "INPUT") return; // already editing
+                  // Replace span with input
+                  const input = document.createElement("input");
+                  input.type = col.type === "integer" || col.type === "number" ? "number" : "text";
+                  input.className = "dt-cell-input";
+                  input.value = displayValue ?? "";
+                  if (col.type === "integer") input.step = "1";
+
+                  td.innerHTML = "";
+                  td.append(input);
+                  input.focus();
+                  input.select();
+
+                  const commit = () => {
+                    const coerced = coerceValue(input.value, col.type);
+                    markDirty(rowKey, col.id, coerced, row);
+                    renderTable();
+                  };
+
+                  input.addEventListener("blur", commit);
+                  input.addEventListener("keydown", (ke) => {
+                    if (ke.key === "Enter") { ke.preventDefault(); commit(); }
+                    if (ke.key === "Escape") { ke.preventDefault(); renderTable(); }
+                  });
+                });
+              }
+            } else {
+              // Read-only cell
+              td.textContent = formatCell(displayValue, col.type);
+              if (col.type === "boolean") {
+                td.classList.add(
+                  displayValue ? "dt-bool--true" : "dt-bool--false",
+                );
+              }
             }
+
             tr.append(td);
           }
+
+          /* Actions cell */
+          if (hasAnyEditable) {
+            const actTd = document.createElement("td");
+            actTd.className = "dt-td dt-td--actions";
+
+            if (rowSaving) {
+              const savingSpan = document.createElement("span");
+              savingSpan.className = "dt-saving-label";
+              savingSpan.textContent = LABELS.saving;
+              actTd.append(savingSpan);
+            } else if (rowDirty) {
+              const saveBtn = document.createElement("button");
+              saveBtn.className = "dt-btn dt-btn--save";
+              saveBtn.textContent = LABELS.save;
+              saveBtn.addEventListener("click", () => saveRow(rowKey));
+
+              const discardBtn = document.createElement("button");
+              discardBtn.className = "dt-btn dt-btn--discard";
+              discardBtn.textContent = LABELS.discard;
+              discardBtn.addEventListener("click", () => {
+                discardDirty(rowKey);
+                renderTable();
+              });
+
+              actTd.append(saveBtn, discardBtn);
+            }
+
+            tr.append(actTd);
+          }
+
           tbody.append(tr);
         }
         table.append(tbody);
 
         wrap.append(table);
+
+        /* ── Save a dirty row via API ──────────────── */
+        async function saveRow(rowKey) {
+          const entry = dirtyRows.get(rowKey);
+          if (!entry) return;
+
+          // Build the full row payload (original + edits)
+          const originalRow = allRows.find((r) => String(r.key ?? "") === rowKey);
+          if (!originalRow) return;
+
+          const payload = { ...originalRow };
+          for (const [field, val] of Object.entries(entry.edits)) {
+            payload[field] = val;
+          }
+
+          // Mark as saving
+          savingRows.add(rowKey);
+          renderTable();
+
+          // Remove any previous error for this row
+          rowCard.querySelectorAll(`.dt-row-error[data-row-key="${CSS.escape(rowKey)}"]`)
+            .forEach((el) => el.remove());
+
+          try {
+            const saved = await api.updateDataTableRow(currentTableId, rowKey, payload);
+
+            // Update the row in allRows with the server response
+            const idx = allRows.findIndex((r) => String(r.key ?? "") === rowKey);
+            if (idx !== -1) allRows[idx] = saved;
+
+            // Clear dirty state
+            dirtyRows.delete(rowKey);
+            savingRows.delete(rowKey);
+            renderTable();
+
+            // Brief success flash
+            const successRow = wrap.querySelector(`tr[data-row-key="${CSS.escape(rowKey)}"]`);
+            if (successRow) {
+              successRow.classList.add("dt-tr--saved");
+              setTimeout(() => successRow.classList.remove("dt-tr--saved"), 1500);
+            }
+          } catch (err) {
+            savingRows.delete(rowKey);
+            renderTable();
+
+            // Show inline error beneath the table
+            const errEl = document.createElement("div");
+            errEl.className = "dt-row-error";
+            errEl.dataset.rowKey = rowKey;
+            errEl.textContent = LABELS.saveError(err.message || String(err));
+            // Insert after wrap
+            wrap.insertAdjacentElement("afterend", errEl);
+          }
+        }
       }
 
       // Initial render
