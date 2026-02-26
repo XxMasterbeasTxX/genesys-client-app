@@ -1059,6 +1059,118 @@ body {
   background: rgba(245,158,11,0.12);
 }
 
+/* Row detail card */
+.dt-row-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dt-row-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dt-row-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text);
+}
+
+/* Search bar */
+.dt-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dt-search-input {
+  flex: 1;
+  max-width: 320px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.dt-search-input::placeholder {
+  color: var(--muted);
+}
+.dt-search-input:focus {
+  outline: none;
+  border-color: rgba(59,130,246,0.5);
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+
+.dt-row-count {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* Table wrapper */
+.dt-rows-wrap {
+  overflow-x: auto;
+}
+
+.dt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.dt-th {
+  text-align: left;
+  padding: 8px 10px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.dt-th:hover {
+  color: var(--text);
+}
+
+.dt-sort-arrow {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.dt-tr {
+  transition: background 0.1s;
+}
+.dt-tr:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.dt-td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+
+.dt-bool--true {
+  color: #22c55e;
+}
+.dt-bool--false {
+  color: var(--muted);
+}
+
+.dt-row-status {
+  padding: 8px 0;
+}
+
 /* ═══════════════════════════════════════════════════════════
    Light-mode overrides  (follows browser / OS preference)
    ═══════════════════════════════════════════════════════════ */
@@ -1281,5 +1393,14 @@ body {
   }
   .dt-error {
     color: #dc2626;
+  }
+  .dt-search-input {
+    color-scheme: light;
+  }
+  .dt-tr:hover {
+    background: rgba(0,0,0,0.03);
+  }
+  .dt-bool--true {
+    color: #16a34a;
   }
 }
