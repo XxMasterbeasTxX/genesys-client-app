@@ -113,6 +113,34 @@ function checklistCompletion(checklists) {
   return allTicked ? STATUS_FILTER.COMPLETE : STATUS_FILTER.INCOMPLETE;
 }
 
+/**
+ * Parse the conversation summaries API response into a flat array.
+ * The API returns { summary: {...}, sessionSummaries: [{...}] } — not { entities: [...] }.
+ * `sessionSummaries` contains per-session summaries (e.g. one per transfer leg).
+ * The top-level `summary` is the overall/combined summary.
+ */
+function parseSummaries(res) {
+  if (!res || typeof res !== "object") return [];
+  const out = [];
+  // Per-session summaries (one per transfer leg)
+  if (Array.isArray(res.sessionSummaries)) {
+    out.push(...res.sessionSummaries);
+  }
+  // Top-level combined summary (add only if there are no session summaries,
+  // or add it as the overall summary when there are multiple sessions)
+  if (res.summary && typeof res.summary === "object" && Object.keys(res.summary).length) {
+    // Avoid duplicating if the top-level summary is identical to the only session summary
+    if (out.length !== 1) {
+      out.unshift(res.summary);
+    }
+  }
+  // Fallback: entities array (some API versions)
+  if (!out.length && Array.isArray(res.entities)) {
+    out.push(...res.entities);
+  }
+  return out;
+}
+
 /* ── Main render ───────────────────────────────────────── */
 
 export async function render({ route, me, api }) {
@@ -781,8 +809,7 @@ export async function render({ route, me, api }) {
         let summaries = [];
         try {
           const sumRes = await api.getConversationSummaries(convId);
-          if (Array.isArray(sumRes?.entities)) summaries = sumRes.entities;
-          else if (Array.isArray(sumRes)) summaries = sumRes;
+          summaries = parseSummaries(sumRes);
         } catch (_) { /* no summaries */ }
         enriched.set(convId, {
           checklists: [],
@@ -798,12 +825,9 @@ export async function render({ route, me, api }) {
       let summaries = [];
       try {
         const sumRes = await api.getConversationSummaries(convId);
-        console.log(`[Summaries] Raw response for ${convId}:`, sumRes);
-        if (Array.isArray(sumRes?.entities)) summaries = sumRes.entities;
-        else if (Array.isArray(sumRes)) summaries = sumRes;
-        console.log(`[Summaries] Parsed ${summaries.length} summaries for ${convId}`);
+        summaries = parseSummaries(sumRes);
       } catch (sumErr) {
-        console.warn(`[Summaries] Failed for ${convId}:`, sumErr.message ?? sumErr);
+        console.debug(`[Summaries] No summaries for ${convId}:`, sumErr.message ?? sumErr);
       }
 
       // Step 3: Try each communication until we find checklists
@@ -1121,6 +1145,7 @@ export async function render({ route, me, api }) {
       drillPanel.append(sumHeader);
 
       summaries.forEach((s, idx) => {
+        console.log(`[Summaries] Summary ${idx}:`, JSON.stringify(s, null, 2));
         const card = document.createElement("div");
         card.className = "checklist-drilldown__summary";
 
@@ -1132,35 +1157,42 @@ export async function render({ route, me, api }) {
           card.append(label);
         }
 
+        // Helper: extract text from either { text: "..." } or a plain string
+        const txt = (v) => (typeof v === "string" ? v : v?.text ?? v?.value ?? null);
+
         // Headline
-        if (s.headline?.text) {
+        const headline = txt(s.headline);
+        if (headline) {
           const hl = document.createElement("div");
           hl.className = "checklist-drilldown__sum-headline";
-          hl.textContent = s.headline.text;
+          hl.textContent = headline;
           card.append(hl);
         }
 
         // Reason
-        if (s.reason?.text) {
+        const reason = txt(s.reason);
+        if (reason) {
           const r = document.createElement("div");
           r.className = "checklist-drilldown__sum-field";
-          r.innerHTML = `<strong>Reason:</strong> ${escapeHtml(s.reason.text)}`;
+          r.innerHTML = `<strong>Reason:</strong> ${escapeHtml(reason)}`;
           card.append(r);
         }
 
         // Resolution
-        if (s.resolution?.text) {
+        const resolution = txt(s.resolution);
+        if (resolution) {
           const r = document.createElement("div");
           r.className = "checklist-drilldown__sum-field";
-          r.innerHTML = `<strong>Resolution:</strong> ${escapeHtml(s.resolution.text)}`;
+          r.innerHTML = `<strong>Resolution:</strong> ${escapeHtml(resolution)}`;
           card.append(r);
         }
 
-        // Full text (wrap-up)
-        if (s.text?.text) {
+        // Full text / description
+        const fullText = txt(s.text) || txt(s.description);
+        if (fullText) {
           const t = document.createElement("div");
           t.className = "checklist-drilldown__sum-text";
-          t.textContent = s.text.text;
+          t.textContent = fullText;
           card.append(t);
         }
 
