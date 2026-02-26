@@ -127,6 +127,9 @@ export async function render({ api }) {
       return root;
     }
 
+    // Sort tables alphabetically by name
+    tables.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+
     /* ── Table list ─────────────────────────────────── */
     const list = document.createElement("ul");
     list.className = "dt-table-list";
