@@ -20,7 +20,7 @@ export const NAV_TREE = [
         path: "agent-copilot",
         enabled: true,
         children: [
-          { label: "Agent Checklists", path: "agent-checklists", enabled: true },
+          { label: "Agent Checklists & Summaries", path: "agent-checklists", enabled: true },
           { label: "Performance", path: "performance", enabled: false },
         ],
       },
