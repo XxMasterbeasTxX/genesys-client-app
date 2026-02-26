@@ -3,7 +3,14 @@
  *
  * Lists all accessible data tables with division info and edit/view-only badges.
  * Selecting a table loads all its rows into a sortable, searchable table.
+ * Respects supervisor / admin mode from the config file.
  */
+
+import {
+  SUPERVISOR_MODE,
+  getTableConfig,
+  getEditableFields,
+} from "./dataTablesConfig.js";
 
 /* ── Constants ─────────────────────────────────────────── */
 
@@ -25,6 +32,12 @@ const LABELS = {
   searchPlaceholder: "Search by key…",
   rowCount: (shown, total) =>
     shown === total ? `${total} rows` : `${shown} of ${total} rows`,
+  modeSupervisor: "Supervisor Mode",
+  modeAdmin: "Administrator Mode",
+  readOnlyBanner: (reason) => reason,
+  lockTooltip: "This field is read-only in Supervisor Mode.",
+  editableTooltip: "This field is editable.",
+  keyTooltip: "The key column is always read-only.",
 };
 
 /** Debounce delay for search input (ms). */
@@ -125,7 +138,16 @@ export async function render({ api }) {
   desc.className = "p";
   desc.textContent = LABELS.pageDescription;
 
-  card.append(h1, desc);
+  /* Mode badge */
+  const modeBadge = document.createElement("span");
+  modeBadge.className = SUPERVISOR_MODE
+    ? "dt-mode-badge dt-mode-badge--supervisor"
+    : "dt-mode-badge dt-mode-badge--admin";
+  modeBadge.textContent = SUPERVISOR_MODE
+    ? LABELS.modeSupervisor
+    : LABELS.modeAdmin;
+
+  card.append(h1, modeBadge, desc);
   root.append(card);
 
   /* ── Loading state ──────────────────────────────────── */
@@ -228,6 +250,10 @@ export async function render({ api }) {
     let columns = [];
     let sortCol = "key";
     let sortAsc = true;
+    /** Editability state for the current table */
+    let editableFields = new Set();
+    let readOnlyReason = null;
+    let currentTableConfig = null;
 
     async function loadTableRows(tableId) {
       currentTableId = tableId;
@@ -238,6 +264,14 @@ export async function render({ api }) {
       allRows = [];
       sortCol = "key";
       sortAsc = true;
+
+      // Editability
+      const divisionId = table.division?.id ?? "";
+      const hasEditPerm = hasDivisionAccess(canEdit, divisionId);
+      const editability = getEditableFields(table, hasEditPerm);
+      editableFields = editability.editableFields;
+      readOnlyReason = editability.readOnlyReason;
+      currentTableConfig = getTableConfig(table);
 
       // Show loading
       rowCard.style.display = "";
@@ -251,6 +285,15 @@ export async function render({ api }) {
       tTitle.textContent = table.name;
 
       header.append(tTitle);
+
+      /* Read-only banner */
+      if (readOnlyReason) {
+        const banner = document.createElement("div");
+        banner.className = "dt-readonly-banner";
+        banner.textContent = LABELS.readOnlyBanner(readOnlyReason);
+        header.append(banner);
+      }
+
       rowCard.append(header);
 
       const loadingEl = document.createElement("div");
@@ -391,8 +434,33 @@ export async function render({ api }) {
           th.className = "dt-th";
           th.dataset.colId = col.id;
 
+          /* Editability indicator on header */
+          const isKey = col.id === "key";
+          const isEditable = !isKey && editableFields.has(col.id);
+          if (isKey) {
+            th.classList.add("dt-th--key");
+            th.title = LABELS.keyTooltip;
+          } else if (isEditable) {
+            th.classList.add("dt-th--editable");
+            th.title = LABELS.editableTooltip;
+          } else if (SUPERVISOR_MODE && !readOnlyReason) {
+            th.classList.add("dt-th--locked");
+            th.title = LABELS.lockTooltip;
+          }
+
           const label = document.createElement("span");
           label.textContent = col.title;
+
+          /* Lock / pencil icon */
+          const icon = document.createElement("span");
+          icon.className = "dt-col-icon";
+          if (isKey) {
+            icon.textContent = " 🔑";
+          } else if (isEditable) {
+            icon.textContent = " ✏️";
+          } else if (SUPERVISOR_MODE && !readOnlyReason) {
+            icon.textContent = " 🔒";
+          }
 
           const arrow = document.createElement("span");
           arrow.className = "dt-sort-arrow";
@@ -400,7 +468,7 @@ export async function render({ api }) {
             arrow.textContent = sortAsc ? " ▲" : " ▼";
           }
 
-          th.append(label, arrow);
+          th.append(label, icon, arrow);
           th.addEventListener("click", () => {
             if (sortCol === col.id) {
               sortAsc = !sortAsc;
