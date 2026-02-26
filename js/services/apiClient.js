@@ -243,5 +243,70 @@ export function createApiClient(getAccessToken) {
     /** Fetch current user with full authorization grants (for permission detection). */
     getUsersMeWithAuth: () =>
       request("/api/v2/users/me?expand=authorization"),
+
+    // ── Lookup helpers (for validation dropdowns) ───────────────
+    /** Fetch ALL queues (auto-paginated). Returns [{ id, name, … }]. */
+    getAllQueues: async () => {
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+      while (all.length < total) {
+        const qs = new URLSearchParams({ pageNumber: page, pageSize: 500 });
+        const res = await request(`/api/v2/routing/queues?${qs}`);
+        total = res.total ?? res.entities?.length ?? 0;
+        if (res.entities) all.push(...res.entities);
+        if (!res.entities?.length) break;
+        page++;
+      }
+      return all;
+    },
+
+    /** Fetch ALL skills (auto-paginated). Returns [{ id, name, … }]. */
+    getAllSkills: async () => {
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+      while (all.length < total) {
+        const qs = new URLSearchParams({ pageNumber: page, pageSize: 500 });
+        const res = await request(`/api/v2/routing/skills?${qs}`);
+        total = res.total ?? res.entities?.length ?? 0;
+        if (res.entities) all.push(...res.entities);
+        if (!res.entities?.length) break;
+        page++;
+      }
+      return all;
+    },
+
+    /** Fetch ALL languages (auto-paginated). Returns [{ id, name, … }]. */
+    getAllLanguages: async () => {
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+      while (all.length < total) {
+        const qs = new URLSearchParams({ pageNumber: page, pageSize: 500 });
+        const res = await request(`/api/v2/routing/languages?${qs}`);
+        total = res.total ?? res.entities?.length ?? 0;
+        if (res.entities) all.push(...res.entities);
+        if (!res.entities?.length) break;
+        page++;
+      }
+      return all;
+    },
+
+    /** Fetch ALL wrap-up codes (auto-paginated). Returns [{ id, name, … }]. */
+    getAllWrapupCodes: async () => {
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+      while (all.length < total) {
+        const qs = new URLSearchParams({ pageNumber: page, pageSize: 500 });
+        const res = await request(`/api/v2/routing/wrapupcodes?${qs}`);
+        total = res.total ?? res.entities?.length ?? 0;
+        if (res.entities) all.push(...res.entities);
+        if (!res.entities?.length) break;
+        page++;
+      }
+      return all;
+    },
   };
 }

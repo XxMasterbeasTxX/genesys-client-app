@@ -10,6 +10,10 @@ import {
   SUPERVISOR_MODE,
   getTableConfig,
   getEditableFields,
+  getColumnRule,
+  validateCell,
+  API_DROPDOWN_TYPES,
+  ENUM_TYPE,
 } from "./dataTablesConfig.js";
 
 /* ── Constants ─────────────────────────────────────────── */
@@ -45,6 +49,10 @@ const LABELS = {
   saveSuccess: "Saved",
   saveError: (msg) => `Save failed: ${msg}`,
   unsavedChanges: "You have unsaved changes.",
+  required: "*",
+  validationBlocksSave: "Fix validation errors before saving.",
+  dropdownPlaceholder: "— select —",
+  loadingOptions: "Loading options…",
 };
 
 /** Debounce delay for search input (ms). */
@@ -151,6 +159,49 @@ function valuesEqual(a, b) {
   if (a === b) return true;
   if (a == null && b == null) return true;
   return false;
+}
+
+/* ── Dropdown options cache ────────────────────────────── */
+
+/**
+ * Cache of API-backed dropdown options.
+ * Key: "queue"|"skill"|"language"|"wrapupCode"  →  [{ id, name }]
+ * Prevents redundant API calls across table switches.
+ */
+const dropdownCache = new Map();
+
+/**
+ * Fetch (or return cached) dropdown options for an API type.
+ * Returns [{ id, name }]. Caches per-type across the session.
+ */
+async function fetchDropdownOptions(api, type) {
+  if (dropdownCache.has(type)) return dropdownCache.get(type);
+
+  let items = [];
+  try {
+    switch (type) {
+      case "queue":      items = await api.getAllQueues(); break;
+      case "skill":      items = await api.getAllSkills(); break;
+      case "language":   items = await api.getAllLanguages(); break;
+      case "wrapupCode": items = await api.getAllWrapupCodes(); break;
+    }
+  } catch { /* swallow — will show empty options */ }
+
+  // Normalise to { id, name }
+  const opts = items.map((i) => ({ id: i.id, name: i.name }));
+  opts.sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
+  dropdownCache.set(type, opts);
+  return opts;
+}
+
+/**
+ * Check whether a column is required.
+ * Checks: Genesys schema `required` array  +  config rule `required`.
+ */
+function isColumnRequired(schema, colId, rule) {
+  if (rule?.required) return true;
+  const req = schema?.required ?? [];
+  return req.includes(colId);
 }
 
 /* ── Render ────────────────────────────────────────────── */
@@ -332,6 +383,56 @@ export async function render({ api }) {
     function clearAllDirty() {
       dirtyRows.clear();
       savingRows.clear();
+      validationErrors.clear();
+      dropdownOptions.clear();
+    }
+
+    /**
+     * Per-cell validation errors.
+     * Map<rowKey, Map<colId, string>>
+     */
+    const validationErrors = new Map();
+
+    /**
+     * Loaded dropdown options for the current table.
+     * Map<colId, { options: [{id,name}], validSet: Set<string> }>
+     */
+    const dropdownOptions = new Map();
+
+    function getCellError(rowKey, colId) {
+      return validationErrors.get(rowKey)?.get(colId) ?? null;
+    }
+
+    function rowHasErrors(rowKey) {
+      const errs = validationErrors.get(rowKey);
+      return errs ? errs.size > 0 : false;
+    }
+
+    /**
+     * Run validation on all dirty cells of a row.
+     * Updates validationErrors map in place.
+     */
+    function validateRow(rowKey, row, schema) {
+      const edits = getDirtyEdits(rowKey);
+      if (!Object.keys(edits).length) {
+        validationErrors.delete(rowKey);
+        return;
+      }
+      const errMap = new Map();
+      for (const [colId, value] of Object.entries(edits)) {
+        const col = columns.find((c) => c.id === colId);
+        if (!col) continue;
+        const rule = getColumnRule(tableMap.get(currentTableId), colId);
+        const optsEntry = dropdownOptions.get(colId);
+        const validSet = optsEntry?.validSet ?? null;
+        const err = validateCell(value, col, rule, validSet);
+        if (err) errMap.set(colId, err);
+      }
+      if (errMap.size) {
+        validationErrors.set(rowKey, errMap);
+      } else {
+        validationErrors.delete(rowKey);
+      }
     }
 
     async function loadTableRows(tableId) {
@@ -397,6 +498,12 @@ export async function render({ api }) {
           return;
         }
 
+        // Prefetch dropdown options for columns that need them
+        await prefetchDropdownOptions(table);
+
+        // Abort if user switched tables while prefetching
+        if (currentTableId !== tableId) return;
+
         renderRowsUI();
       } catch (err) {
         if (currentTableId !== tableId) return;
@@ -407,6 +514,39 @@ export async function render({ api }) {
           LABELS.errorRows + (err.message || String(err));
         rowCard.append(errEl);
       }
+    }
+
+    /* ── Prefetch dropdown options ─────────────────────── */
+
+    async function prefetchDropdownOptions(table) {
+      dropdownOptions.clear();
+      const cfg = getTableConfig(table);
+      if (!cfg?.validation || !cfg.columns) return;
+
+      const fetches = [];
+      for (const col of columns) {
+        const rule = cfg.columns[col.id];
+        if (!rule) continue;
+
+        if (API_DROPDOWN_TYPES.has(rule.type)) {
+          fetches.push(
+            fetchDropdownOptions(api, rule.type).then((opts) => {
+              const storeAs = rule.storeAs ?? "name";
+              const validSet = new Set(opts.map((o) => String(o[storeAs])));
+              dropdownOptions.set(col.id, { options: opts, validSet, storeAs });
+            }),
+          );
+        } else if (rule.type === ENUM_TYPE && rule.options?.length) {
+          const validSet = new Set(rule.options.map(String));
+          dropdownOptions.set(col.id, {
+            options: rule.options.map((o) => ({ id: o, name: o })),
+            validSet,
+            storeAs: "name",
+          });
+        }
+      }
+
+      await Promise.all(fetches);
     }
 
     /* ── Rows UI: search bar + sortable table ───────── */
@@ -533,6 +673,17 @@ export async function render({ api }) {
           const label = document.createElement("span");
           label.textContent = col.title;
 
+          /* Required asterisk */
+          const table_ = tableMap.get(currentTableId);
+          const colRule = getColumnRule(table_, col.id);
+          if (!isKey && isColumnRequired(table_?.schema, col.id, colRule)) {
+            const req = document.createElement("span");
+            req.className = "dt-required";
+            req.textContent = LABELS.required;
+            req.title = "Required";
+            label.append(req);
+          }
+
           /* Lock / pencil icon */
           const icon = document.createElement("span");
           icon.className = "dt-col-icon";
@@ -598,11 +749,21 @@ export async function render({ api }) {
             // Show edited value if dirty, else original
             const displayValue = col.id in edits ? edits[col.id] : row[col.id];
 
+            // Per-cell validation error
+            const cellError = getCellError(rowKey, col.id);
+
+            // Column rule (for dropdown type detection)
+            const colRule = getColumnRule(tableMap.get(currentTableId), col.id);
+            const isDropdown =
+              colRule &&
+              (API_DROPDOWN_TYPES.has(colRule.type) || colRule.type === ENUM_TYPE);
+
             if (cellEditable) {
               td.classList.add("dt-td--editable");
               if (col.id in edits) td.classList.add("dt-td--changed");
+              if (cellError) td.classList.add("dt-td--error");
 
-              if (col.type === "boolean") {
+              if (col.type === "boolean" || colRule?.type === "boolean") {
                 // Boolean → checkbox
                 const cb = document.createElement("input");
                 cb.type = "checkbox";
@@ -612,9 +773,41 @@ export async function render({ api }) {
                 cb.addEventListener("change", () => {
                   const coerced = coerceValue(cb.checked, "boolean");
                   markDirty(rowKey, col.id, coerced, row);
+                  validateRow(rowKey, row, tableMap.get(currentTableId)?.schema);
                   renderTable();
                 });
                 td.append(cb);
+              } else if (isDropdown && dropdownOptions.has(col.id)) {
+                // Dropdown (enum or API-backed)
+                const optsEntry = dropdownOptions.get(col.id);
+                const sel = document.createElement("select");
+                sel.className = "dt-cell-select";
+                sel.disabled = rowSaving;
+
+                // Placeholder option
+                const placeholder = document.createElement("option");
+                placeholder.value = "";
+                placeholder.textContent = LABELS.dropdownPlaceholder;
+                placeholder.disabled = true;
+                if (!displayValue && displayValue !== false) placeholder.selected = true;
+                sel.append(placeholder);
+
+                for (const opt of optsEntry.options) {
+                  const o = document.createElement("option");
+                  const storeVal = String(opt[optsEntry.storeAs] ?? opt.name);
+                  o.value = storeVal;
+                  o.textContent = opt.name;
+                  if (String(displayValue) === storeVal) o.selected = true;
+                  sel.append(o);
+                }
+
+                sel.addEventListener("change", () => {
+                  markDirty(rowKey, col.id, sel.value, row);
+                  validateRow(rowKey, row, tableMap.get(currentTableId)?.schema);
+                  renderTable();
+                });
+
+                td.append(sel);
               } else {
                 // Text / number → click-to-edit
                 const span = document.createElement("span");
@@ -623,8 +816,7 @@ export async function render({ api }) {
                 td.append(span);
 
                 td.addEventListener("click", (e) => {
-                  if (e.target.tagName === "INPUT") return; // already editing
-                  // Replace span with input
+                  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
                   const input = document.createElement("input");
                   input.type = col.type === "integer" || col.type === "number" ? "number" : "text";
                   input.className = "dt-cell-input";
@@ -639,6 +831,7 @@ export async function render({ api }) {
                   const commit = () => {
                     const coerced = coerceValue(input.value, col.type);
                     markDirty(rowKey, col.id, coerced, row);
+                    validateRow(rowKey, row, tableMap.get(currentTableId)?.schema);
                     renderTable();
                   };
 
@@ -648,6 +841,15 @@ export async function render({ api }) {
                     if (ke.key === "Escape") { ke.preventDefault(); renderTable(); }
                   });
                 });
+              }
+
+              // Show validation error tooltip
+              if (cellError) {
+                td.title = cellError;
+                const errSpan = document.createElement("span");
+                errSpan.className = "dt-cell-error";
+                errSpan.textContent = cellError;
+                td.append(errSpan);
               }
             } else {
               // Read-only cell
@@ -673,16 +875,26 @@ export async function render({ api }) {
               savingSpan.textContent = LABELS.saving;
               actTd.append(savingSpan);
             } else if (rowDirty) {
+              const hasErrors = rowHasErrors(rowKey);
+
               const saveBtn = document.createElement("button");
               saveBtn.className = "dt-btn dt-btn--save";
               saveBtn.textContent = LABELS.save;
-              saveBtn.addEventListener("click", () => saveRow(rowKey));
+              if (hasErrors) {
+                saveBtn.disabled = true;
+                saveBtn.title = LABELS.validationBlocksSave;
+                saveBtn.classList.add("dt-btn--disabled");
+              }
+              saveBtn.addEventListener("click", () => {
+                if (!hasErrors) saveRow(rowKey);
+              });
 
               const discardBtn = document.createElement("button");
               discardBtn.className = "dt-btn dt-btn--discard";
               discardBtn.textContent = LABELS.discard;
               discardBtn.addEventListener("click", () => {
                 discardDirty(rowKey);
+                validationErrors.delete(rowKey);
                 renderTable();
               });
 
@@ -703,9 +915,16 @@ export async function render({ api }) {
           const entry = dirtyRows.get(rowKey);
           if (!entry) return;
 
-          // Build the full row payload (original + edits)
+          // Run validation one more time before saving
           const originalRow = allRows.find((r) => String(r.key ?? "") === rowKey);
           if (!originalRow) return;
+          validateRow(rowKey, originalRow, tableMap.get(currentTableId)?.schema);
+          if (rowHasErrors(rowKey)) {
+            renderTable();
+            return;
+          }
+
+          // Build the full row payload (original + edits)
 
           const payload = { ...originalRow };
           for (const [field, val] of Object.entries(entry.edits)) {

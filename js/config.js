@@ -15,7 +15,8 @@ export const CONFIG = {
   // OIDC scopes — enriches the id_token. API permissions are controlled
   // by the OAuth client roles and the user's own roles in Genesys Cloud admin.
   // "architect" scope is required for Data Tables read/write access.
-  oauthScopes: ["openid", "profile", "email", "architect"],
+  // "routing" scope is required for queue/skill/language/wrapup-code lookups.
+  oauthScopes: ["openid", "profile", "email", "architect", "routing"],
 
   // Azure Functions backend (trunk history, etc.)
   functionsBase: "https://genesys-app-functions-ebfcc6ffbshwazbh.swedencentral-01.azurewebsites.net",

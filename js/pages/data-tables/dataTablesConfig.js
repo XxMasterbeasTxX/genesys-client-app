@@ -133,3 +133,114 @@ export function getEditableFields(table, hasEditPerm) {
       : "Supervisor mode: no editable fields configured for this table.",
   };
 }
+
+/**
+ * Get the custom column rule for a field, if any.
+ * Returns the rule object from TABLE_CONFIGS.columns, or null.
+ */
+export function getColumnRule(table, fieldId) {
+  const cfg = getTableConfig(table);
+  if (!cfg?.validation || !cfg.columns) return null;
+  return cfg.columns[fieldId] ?? null;
+}
+
+/** Column types that render as API-backed dropdowns. */
+export const API_DROPDOWN_TYPES = new Set([
+  "queue",
+  "skill",
+  "language",
+  "wrapupCode",
+]);
+
+/** Column types that render as static enum dropdowns. */
+export const ENUM_TYPE = "enum";
+
+/**
+ * Validate a single cell value against schema type + optional custom rule.
+ *
+ * @param {*}       value     The coerced cell value
+ * @param {object}  col       Column def { id, title, type }
+ * @param {object|null} rule  Custom rule from config (or null)
+ * @param {Set|null} validOptions  For enum/API dropdowns: the set of valid option values
+ * @returns {string|null}     Error message, or null if valid
+ */
+export function validateCell(value, col, rule, validOptions = null) {
+  const effectiveType = rule?.type ?? col.type;
+  const isRequired = rule?.required === true;
+  const isEmpty = value === null || value === undefined || value === "";
+
+  // Required check
+  if (isRequired && isEmpty) {
+    return `${col.title} is required.`;
+  }
+
+  // If empty and not required, skip further checks
+  if (isEmpty) return null;
+
+  // Type-specific validation
+  switch (effectiveType) {
+    case "string":
+    case "phone":
+    case "email":
+    case "url": {
+      const s = String(value);
+      if (rule?.minLength != null && s.length < rule.minLength) {
+        return `Minimum ${rule.minLength} characters.`;
+      }
+      if (rule?.maxLength != null && s.length > rule.maxLength) {
+        return `Maximum ${rule.maxLength} characters.`;
+      }
+      if (rule?.pattern) {
+        try {
+          if (!new RegExp(rule.pattern).test(s)) {
+            return `Value does not match required pattern.`;
+          }
+        } catch { /* invalid regex in config — skip */ }
+      }
+      if (effectiveType === "email" && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) {
+        return "Invalid email address.";
+      }
+      if (effectiveType === "phone" && !/^\+?[\d\s\-().]{5,20}$/.test(s)) {
+        return "Invalid phone number.";
+      }
+      if (effectiveType === "url") {
+        try { new URL(s); } catch { return "Invalid URL."; }
+      }
+      break;
+    }
+    case "integer": {
+      const n = Number(value);
+      if (!Number.isFinite(n) || !Number.isInteger(n)) {
+        return "Must be a whole number.";
+      }
+      if (rule?.min != null && n < rule.min) return `Minimum value is ${rule.min}.`;
+      if (rule?.max != null && n > rule.max) return `Maximum value is ${rule.max}.`;
+      break;
+    }
+    case "number": {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return "Must be a number.";
+      if (rule?.min != null && n < rule.min) return `Minimum value is ${rule.min}.`;
+      if (rule?.max != null && n > rule.max) return `Maximum value is ${rule.max}.`;
+      break;
+    }
+    case "boolean":
+      // Booleans are always valid once coerced
+      break;
+    case "enum":
+      if (validOptions && !validOptions.has(String(value))) {
+        return "Value is not in the allowed list.";
+      }
+      break;
+    case "queue":
+    case "skill":
+    case "language":
+    case "wrapupCode":
+      if (validOptions && !validOptions.has(String(value))) {
+        return `Invalid ${effectiveType} — not found.`;
+      }
+      break;
+  }
+
+  return null;
+}

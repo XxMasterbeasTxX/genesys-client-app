@@ -1343,6 +1343,53 @@ body {
   border: 1px solid rgba(239,68,68,0.18);
 }
 
+/* Required asterisk */
+.dt-required {
+  color: #ef4444;
+  margin-left: 2px;
+  font-weight: 700;
+}
+
+/* Cell validation error state */
+.dt-td--error {
+  border-left: 2px solid #ef4444 !important;
+  background: rgba(239,68,68,0.06);
+}
+
+/* Per-cell error message */
+.dt-cell-error {
+  display: block;
+  font-size: 10px;
+  color: #ef4444;
+  margin-top: 2px;
+  line-height: 1.2;
+}
+
+/* Dropdown select */
+.dt-cell-select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.dt-cell-select:focus {
+  outline: none;
+  border-color: rgba(59,130,246,0.5);
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+}
+
+/* Disabled save button */
+.dt-btn--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* ═══════════════════════════════════════════════════════════
    Light-mode overrides  (follows browser / OS preference)
    ═══════════════════════════════════════════════════════════ */
@@ -1614,5 +1661,18 @@ body {
     color: #dc2626;
     background: rgba(220,38,38,0.06);
     border-color: rgba(220,38,38,0.15);
+  }
+  .dt-td--error {
+    border-left-color: #dc2626 !important;
+    background: rgba(220,38,38,0.04);
+  }
+  .dt-cell-error {
+    color: #dc2626;
+  }
+  .dt-required {
+    color: #dc2626;
+  }
+  .dt-cell-select {
+    color-scheme: light;
   }
 }
