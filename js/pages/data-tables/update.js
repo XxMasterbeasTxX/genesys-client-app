@@ -814,7 +814,7 @@ export async function render({ api }) {
                 });
                 td.append(cb);
               } else if (isDropdown && dropdownOptions.has(col.id)) {
-                // Dropdown (enum or API-backed)
+                // Dropdown (enum, API-backed, or datatable)
                 const optsEntry = dropdownOptions.get(col.id);
                 const sel = document.createElement("select");
                 sel.className = "dt-cell-select";
@@ -828,14 +828,18 @@ export async function render({ api }) {
                 if (!displayValue && displayValue !== false) placeholder.selected = true;
                 sel.append(placeholder);
 
+                const normalised = String(displayValue ?? "").trim();
                 for (const opt of optsEntry.options) {
                   const o = document.createElement("option");
                   const storeVal = String(opt[optsEntry.storeAs] ?? opt.name);
                   o.value = storeVal;
                   o.textContent = opt.name;
-                  if (String(displayValue) === storeVal) o.selected = true;
+                  if (normalised === storeVal.trim()) o.selected = true;
                   sel.append(o);
                 }
+
+                // Belt-and-suspenders: set value explicitly after all options exist
+                if (normalised) sel.value = normalised;
 
                 sel.addEventListener("change", () => {
                   markDirty(rowKey, col.id, sel.value, row);
