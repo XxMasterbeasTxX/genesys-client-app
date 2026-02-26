@@ -420,7 +420,6 @@ export async function render({ api }) {
       dirtyRows.clear();
       savingRows.clear();
       validationErrors.clear();
-      dropdownOptions.clear();
     }
 
     /**
