@@ -798,10 +798,12 @@ export async function render({ route, me, api }) {
       let summaries = [];
       try {
         const sumRes = await api.getConversationSummaries(convId);
+        console.log(`[Summaries] Raw response for ${convId}:`, sumRes);
         if (Array.isArray(sumRes?.entities)) summaries = sumRes.entities;
         else if (Array.isArray(sumRes)) summaries = sumRes;
+        console.log(`[Summaries] Parsed ${summaries.length} summaries for ${convId}`);
       } catch (sumErr) {
-        console.debug(`[Summaries] No summaries for ${convId}:`, sumErr.message ?? sumErr);
+        console.warn(`[Summaries] Failed for ${convId}:`, sumErr.message ?? sumErr);
       }
 
       // Step 3: Try each communication until we find checklists
