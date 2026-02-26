@@ -34,7 +34,7 @@ const LABELS = {
   badgeView: "View-only",
   division: "Division",
   fields: "fields",
-  searchPlaceholder: "Search by key…",
+  searchPlaceholder: "Search rows…",
   rowCount: (shown, total) =>
     shown === total ? `${total} rows` : `${shown} of ${total} rows`,
   modeSupervisor: "Supervisor Mode",
@@ -193,7 +193,6 @@ async function fetchDropdownOptions(api, type, datatableId) {
         const rows = await api.getDataTableRows(datatableId);
         // Normalise rows to { id, name } using the key field
         items = rows.map((r) => ({ id: r.key, name: r.key }));
-        console.log("[DataTable lookup] keys fetched:", items.map((i) => JSON.stringify(i.name)));
         break;
       }
     }
@@ -289,21 +288,38 @@ export async function render({ api }) {
     // Build a lookup map for quick access
     const tableMap = new Map(tables.map((t) => [t.id, t]));
 
-    /* ── Table list ─────────────────────────────────── */
-    const list = document.createElement("ul");
-    list.className = "dt-table-list";
+    /* ── Table selector (searchable dropdown) ──────── */
+    const selectorWrap = document.createElement("div");
+    selectorWrap.className = "dt-table-selector";
 
+    const selectorInput = document.createElement("input");
+    selectorInput.type = "text";
+    selectorInput.className = "dt-table-selector__input";
+    selectorInput.placeholder = "Search data tables…";
+
+    const selectorDropdown = document.createElement("ul");
+    selectorDropdown.className = "dt-table-selector__list";
+
+    // Build list items
+    const selectorItems = [];
     for (const table of tables) {
-      const divisionId = table.division?.id ?? "";
       const divisionName = table.division?.name ?? "—";
+      const divisionId = table.division?.id ?? "";
       const isEditable = hasDivisionAccess(canEdit, divisionId);
-
       const schemaProps = table.schema?.properties ?? {};
       const fieldCount = Object.keys(schemaProps).length;
 
       const li = document.createElement("li");
-      li.className = "dt-table-item";
+      li.className = "dt-table-selector__item";
       li.dataset.tableId = table.id;
+
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "dt-table-selector__name";
+      nameSpan.textContent = table.name;
+
+      const metaSpan = document.createElement("span");
+      metaSpan.className = "dt-table-selector__meta";
+      metaSpan.textContent = `${divisionName} · ${fieldCount} ${LABELS.fields}`;
 
       const badge = document.createElement("span");
       badge.className = isEditable
@@ -311,32 +327,40 @@ export async function render({ api }) {
         : "dt-badge dt-badge--view";
       badge.textContent = isEditable ? LABELS.badgeEdit : LABELS.badgeView;
 
-      const name = document.createElement("span");
-      name.className = "dt-table-name";
-      name.textContent = table.name;
-
-      const meta = document.createElement("span");
-      meta.className = "dt-table-meta";
-      meta.textContent = `${LABELS.division}: ${divisionName} · ${fieldCount} ${LABELS.fields}`;
-
-      const info = document.createElement("div");
-      info.className = "dt-table-info";
-      info.append(name, meta);
-
-      li.append(info, badge);
+      li.append(nameSpan, metaSpan, badge);
 
       li.addEventListener("click", () => {
-        list
-          .querySelectorAll(".dt-table-item")
-          .forEach((el) => el.classList.remove("dt-table-item--active"));
-        li.classList.add("dt-table-item--active");
+        selectorInput.value = table.name;
+        selectorDropdown.classList.remove("dt-table-selector__list--open");
         loadTableRows(table.id);
       });
 
-      list.append(li);
+      selectorDropdown.append(li);
+      selectorItems.push({ li, name: table.name.toLowerCase() });
     }
 
-    listCard.append(list);
+    // Filter items as user types
+    selectorInput.addEventListener("input", () => {
+      const q = selectorInput.value.trim().toLowerCase();
+      for (const { li, name } of selectorItems) {
+        li.style.display = name.includes(q) ? "" : "none";
+      }
+    });
+
+    // Show dropdown on focus / click
+    selectorInput.addEventListener("focus", () => {
+      selectorDropdown.classList.add("dt-table-selector__list--open");
+    });
+
+    // Hide dropdown when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!selectorWrap.contains(e.target)) {
+        selectorDropdown.classList.remove("dt-table-selector__list--open");
+      }
+    });
+
+    selectorWrap.append(selectorInput, selectorDropdown);
+    listCard.append(selectorWrap);
 
     /* ── Load rows for a selected table ─────────────── */
 
@@ -604,7 +628,30 @@ export async function render({ api }) {
       rowCount.className = "dt-row-count";
       rowCount.textContent = LABELS.rowCount(allRows.length, allRows.length);
 
-      searchBar.append(searchInput, rowCount);
+      /* Action buttons container (Save All / Discard All) */
+      const actionBtns = document.createElement("div");
+      actionBtns.className = "dt-action-btns";
+
+      const saveAllBtn = document.createElement("button");
+      saveAllBtn.className = "dt-btn dt-btn--save";
+      saveAllBtn.textContent = "Save All";
+      saveAllBtn.addEventListener("click", () => {
+        for (const rowKey of [...dirtyRows.keys()]) {
+          if (!rowHasErrors(rowKey)) saveRow(rowKey);
+        }
+      });
+
+      const discardAllBtn = document.createElement("button");
+      discardAllBtn.className = "dt-btn dt-btn--discard";
+      discardAllBtn.textContent = "Discard All";
+      discardAllBtn.addEventListener("click", () => {
+        clearAllDirty();
+        renderTable();
+      });
+
+      actionBtns.append(saveAllBtn, discardAllBtn);
+
+      searchBar.append(searchInput, rowCount, actionBtns);
       rowCard.append(searchBar);
 
       /* Table wrapper */
@@ -626,13 +673,15 @@ export async function render({ api }) {
       function getVisibleRows() {
         let rows = allRows;
 
-        // Filter by key (case-insensitive substring)
+        // Filter by all columns (case-insensitive substring)
         if (searchTerm) {
           const lc = searchTerm.toLowerCase();
           rows = rows.filter((r) =>
-            String(r.key ?? "")
-              .toLowerCase()
-              .includes(lc),
+            columns.some((col) =>
+              String(r[col.id] ?? "")
+                .toLowerCase()
+                .includes(lc),
+            ),
           );
         }
 
@@ -669,14 +718,21 @@ export async function render({ api }) {
           allRows.length,
         );
 
+        // Show/hide Save All / Discard All buttons
+        const hasDirty = dirtyRows.size > 0;
+        actionBtns.style.display = hasDirty ? "" : "none";
+        // Disable Save All if any dirty row has errors
+        const anyErrors = [...dirtyRows.keys()].some((k) => rowHasErrors(k));
+        saveAllBtn.disabled = anyErrors;
+        saveAllBtn.classList.toggle("dt-btn--disabled", anyErrors);
+        saveAllBtn.title = anyErrors ? LABELS.validationBlocksSave : "";
+
         // No match?
         if (!visible.length) {
           noMatch.style.display = "";
           return;
         }
         noMatch.style.display = "none";
-
-        const hasAnyEditable = editableFields.size > 0;
 
         const table = document.createElement("table");
         table.className = "dt-table";
@@ -746,14 +802,6 @@ export async function render({ api }) {
             renderTable();
           });
           headRow.append(th);
-        }
-
-        /* Actions column header (only when editable) */
-        if (hasAnyEditable) {
-          const thAct = document.createElement("th");
-          thAct.className = "dt-th dt-th--actions";
-          thAct.textContent = LABELS.actions;
-          headRow.append(thAct);
         }
 
         thead.append(headRow);
@@ -840,14 +888,8 @@ export async function render({ api }) {
                   sel.append(o);
                 }
 
-                // Debug: log mismatch to help identify value discrepancies
+                // If current value isn't in the option list, add it so it's visible
                 if (normalised && !matched) {
-                  console.warn(
-                    `[Dropdown mismatch] col="${col.id}" value=${JSON.stringify(displayValue)}`,
-                    `normalised=${JSON.stringify(normalised)}`,
-                    `options=${JSON.stringify(optsEntry.options.map((o) => o[optsEntry.storeAs] ?? o.name))}`,
-                  );
-                  // Add current value as a fallback option so it's visible
                   const extra = document.createElement("option");
                   extra.value = normalised;
                   extra.textContent = `${normalised} ⚠️`;
@@ -921,111 +963,70 @@ export async function render({ api }) {
             tr.append(td);
           }
 
-          /* Actions cell */
-          if (hasAnyEditable) {
-            const actTd = document.createElement("td");
-            actTd.className = "dt-td dt-td--actions";
-
-            if (rowSaving) {
-              const savingSpan = document.createElement("span");
-              savingSpan.className = "dt-saving-label";
-              savingSpan.textContent = LABELS.saving;
-              actTd.append(savingSpan);
-            } else if (rowDirty) {
-              const hasErrors = rowHasErrors(rowKey);
-
-              const saveBtn = document.createElement("button");
-              saveBtn.className = "dt-btn dt-btn--save";
-              saveBtn.textContent = LABELS.save;
-              if (hasErrors) {
-                saveBtn.disabled = true;
-                saveBtn.title = LABELS.validationBlocksSave;
-                saveBtn.classList.add("dt-btn--disabled");
-              }
-              saveBtn.addEventListener("click", () => {
-                if (!hasErrors) saveRow(rowKey);
-              });
-
-              const discardBtn = document.createElement("button");
-              discardBtn.className = "dt-btn dt-btn--discard";
-              discardBtn.textContent = LABELS.discard;
-              discardBtn.addEventListener("click", () => {
-                discardDirty(rowKey);
-                validationErrors.delete(rowKey);
-                renderTable();
-              });
-
-              actTd.append(saveBtn, discardBtn);
-            }
-
-            tr.append(actTd);
-          }
-
           tbody.append(tr);
         }
         table.append(tbody);
 
         wrap.append(table);
+      }
 
-        /* ── Save a dirty row via API ──────────────── */
-        async function saveRow(rowKey) {
-          const entry = dirtyRows.get(rowKey);
-          if (!entry) return;
+      /* ── Save a dirty row via API ──────────────── */
+      async function saveRow(rowKey) {
+        const entry = dirtyRows.get(rowKey);
+        if (!entry) return;
 
-          // Run validation one more time before saving
-          const originalRow = allRows.find((r) => String(r.key ?? "") === rowKey);
-          if (!originalRow) return;
-          validateRow(rowKey, originalRow, tableMap.get(currentTableId)?.schema);
-          if (rowHasErrors(rowKey)) {
-            renderTable();
-            return;
-          }
+        // Run validation one more time before saving
+        const originalRow = allRows.find((r) => String(r.key ?? "") === rowKey);
+        if (!originalRow) return;
+        validateRow(rowKey, originalRow, tableMap.get(currentTableId)?.schema);
+        if (rowHasErrors(rowKey)) {
+          renderTable();
+          return;
+        }
 
-          // Build the full row payload (original + edits)
+        // Build the full row payload (original + edits)
+        const payload = { ...originalRow };
+        for (const [field, val] of Object.entries(entry.edits)) {
+          payload[field] = val;
+        }
 
-          const payload = { ...originalRow };
-          for (const [field, val] of Object.entries(entry.edits)) {
-            payload[field] = val;
-          }
+        // Mark as saving
+        savingRows.add(rowKey);
+        renderTable();
 
-          // Mark as saving
-          savingRows.add(rowKey);
+        // Remove any previous error for this row
+        rowCard.querySelectorAll(`.dt-row-error[data-row-key="${CSS.escape(rowKey)}"]`)
+          .forEach((el) => el.remove());
+
+        try {
+          const saved = await api.updateDataTableRow(currentTableId, rowKey, payload);
+
+          // Update the row in allRows with the server response
+          const idx = allRows.findIndex((r) => String(r.key ?? "") === rowKey);
+          if (idx !== -1) allRows[idx] = saved;
+
+          // Clear dirty state
+          dirtyRows.delete(rowKey);
+          savingRows.delete(rowKey);
           renderTable();
 
-          // Remove any previous error for this row
-          rowCard.querySelectorAll(`.dt-row-error[data-row-key="${CSS.escape(rowKey)}"]`)
-            .forEach((el) => el.remove());
-
-          try {
-            const saved = await api.updateDataTableRow(currentTableId, rowKey, payload);
-
-            // Update the row in allRows with the server response
-            const idx = allRows.findIndex((r) => String(r.key ?? "") === rowKey);
-            if (idx !== -1) allRows[idx] = saved;
-
-            // Clear dirty state
-            dirtyRows.delete(rowKey);
-            savingRows.delete(rowKey);
-            renderTable();
-
-            // Brief success flash
-            const successRow = wrap.querySelector(`tr[data-row-key="${CSS.escape(rowKey)}"]`);
-            if (successRow) {
-              successRow.classList.add("dt-tr--saved");
-              setTimeout(() => successRow.classList.remove("dt-tr--saved"), 1500);
-            }
-          } catch (err) {
-            savingRows.delete(rowKey);
-            renderTable();
-
-            // Show inline error beneath the table
-            const errEl = document.createElement("div");
-            errEl.className = "dt-row-error";
-            errEl.dataset.rowKey = rowKey;
-            errEl.textContent = LABELS.saveError(err.message || String(err));
-            // Insert after wrap
-            wrap.insertAdjacentElement("afterend", errEl);
+          // Brief success flash
+          const successRow = wrap.querySelector(`tr[data-row-key="${CSS.escape(rowKey)}"]`);
+          if (successRow) {
+            successRow.classList.add("dt-tr--saved");
+            setTimeout(() => successRow.classList.remove("dt-tr--saved"), 1500);
           }
+        } catch (err) {
+          savingRows.delete(rowKey);
+          renderTable();
+
+          // Show inline error beneath the table
+          const errEl = document.createElement("div");
+          errEl.className = "dt-row-error";
+          errEl.dataset.rowKey = rowKey;
+          errEl.textContent = LABELS.saveError(err.message || String(err));
+          // Insert after wrap
+          wrap.insertAdjacentElement("afterend", errEl);
         }
       }
 
