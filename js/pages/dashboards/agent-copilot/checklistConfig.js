@@ -61,6 +61,7 @@ export const STATUS_FILTER = Object.freeze({
   ALL: "all",
   COMPLETE: "complete",
   INCOMPLETE: "incomplete",
+  SUMMARIES: "summaries",
 });
 
 // ── Date / time formats (Intl.DateTimeFormat options) ─────
@@ -156,6 +157,7 @@ export const LABELS = Object.freeze({
   statusAll: "All",
   statusComplete: "✅ Completed",
   statusIncomplete: "⚠️ Incomplete",
+  statusSummaries: "📝 Summaries",
   searchBtn: "🔍 Search",
   exportBtn: "⬇ Export Excel",
   applyBtn: "Apply",

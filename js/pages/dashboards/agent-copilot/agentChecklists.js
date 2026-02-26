@@ -271,6 +271,7 @@ export async function render({ route, me, api }) {
     { val: STATUS_FILTER.ALL, label: LABELS.statusAll },
     { val: STATUS_FILTER.COMPLETE, label: LABELS.statusComplete },
     { val: STATUS_FILTER.INCOMPLETE, label: LABELS.statusIncomplete },
+    { val: STATUS_FILTER.SUMMARIES, label: LABELS.statusSummaries },
   ].map(({ val, label }) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -641,16 +642,24 @@ export async function render({ route, me, api }) {
     const rows = tableWrap.querySelectorAll(".checklist-row");
     for (const row of rows) {
       const info = enriched.get(row.dataset.convId);
+
       if (statusFilter === STATUS_FILTER.ALL) {
-        // "All" shows only interactions that have checklist data
+        // Show every interaction regardless of checklist/summary data
+        row.hidden = false;
+        continue;
+      }
+
+      if (statusFilter === STATUS_FILTER.SUMMARIES) {
+        // Show only interactions that have at least one summary
         if (!info) {
-          row.hidden = false; // still loading — keep visible
+          row.hidden = true; // still loading
         } else {
-          row.hidden = !info.checklists?.length;
+          row.hidden = !info.summaries?.length;
         }
         continue;
       }
-      // Not yet enriched — hide while filtering
+
+      // Complete / Incomplete filters
       if (!info) {
         row.hidden = true;
         continue;
