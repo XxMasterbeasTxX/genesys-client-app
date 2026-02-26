@@ -81,7 +81,7 @@ export const TABLE_CONFIGS = [
       },
       "IVR Menu - Name": {
         type: "datatable",
-        datatableName: "IVR Menus",
+        datatableName: "Demo - Voice - IVR Menu",
       },
 
       // ─── Integer fields ──────────────────────────────────
