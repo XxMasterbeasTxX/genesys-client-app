@@ -1125,8 +1125,11 @@ export async function render({ route, me, api }) {
           <span class="checklist-drilldown__icon">${ticked ? "✅" : "❌"}</span>
           <span class="checklist-drilldown__item-name">${escapeHtml(item.name)}</span>
           ${item.important ? `<span class="checklist-drilldown__important" title="Important">⚡</span>` : ""}
-          <span class="checklist-drilldown__ai" title="AI evaluation: ${modelTicked ? TICK_STATE.TICKED : TICK_STATE.UNTICKED}">
-            AI: ${modelTicked ? "✓" : "✗"}
+          <span class="checklist-drilldown__eval" title="Agent: ${agentTicked ? TICK_STATE.TICKED : TICK_STATE.UNTICKED}">
+            Agent: <span class="${agentTicked ? 'checklist-drilldown__tick--green' : 'checklist-drilldown__tick--red'}">${agentTicked ? "✓" : "✗"}</span>
+          </span>
+          <span class="checklist-drilldown__eval" title="AI: ${modelTicked ? TICK_STATE.TICKED : TICK_STATE.UNTICKED}">
+            AI: <span class="${modelTicked ? 'checklist-drilldown__tick--green' : 'checklist-drilldown__tick--red'}">${modelTicked ? "✓" : "✗"}</span>
           </span>
         `;
 
@@ -1167,6 +1170,34 @@ export async function render({ route, me, api }) {
 
         // Helper: extract text from either { text: "..." } or a plain string
         const txt = (v) => (typeof v === "string" ? v : v?.text ?? v?.value ?? null);
+        // Helper: check if an edited object has content
+        const hasEdited = (v) => v && typeof v === "object" && Object.keys(v).length > 0;
+
+        // Helper: render a summary field with optional edited version
+        const renderField = (label, original, edited) => {
+          const origText = txt(original);
+          const editText = hasEdited(edited) ? txt(edited) : null;
+          if (!origText && !editText) return;
+
+          if (editText) {
+            // Show edited version as primary, original as struck-through
+            const wrap = document.createElement("div");
+            wrap.className = "checklist-drilldown__sum-field";
+            wrap.innerHTML = `<strong>${escapeHtml(label)}:</strong> ${escapeHtml(editText)} <span class="checklist-drilldown__edited-badge" title="Edited by agent">✏️ Edited</span>`;
+            card.append(wrap);
+            if (origText && origText !== editText) {
+              const orig = document.createElement("div");
+              orig.className = "checklist-drilldown__sum-field checklist-drilldown__sum-field--original";
+              orig.innerHTML = `<strong>Original:</strong> <span class="checklist-drilldown__strikethrough">${escapeHtml(origText)}</span>`;
+              card.append(orig);
+            }
+          } else if (origText) {
+            const r = document.createElement("div");
+            r.className = "checklist-drilldown__sum-field";
+            r.innerHTML = `<strong>${escapeHtml(label)}:</strong> ${escapeHtml(origText)}`;
+            card.append(r);
+          }
+        };
 
         // Headline
         const headline = txt(s.headline);
@@ -1177,27 +1208,48 @@ export async function render({ route, me, api }) {
           card.append(hl);
         }
 
-        // Reason
-        const reason = txt(s.reason);
-        if (reason) {
-          const r = document.createElement("div");
-          r.className = "checklist-drilldown__sum-field";
-          r.innerHTML = `<strong>Reason:</strong> ${escapeHtml(reason)}`;
-          card.append(r);
-        }
+        // Known fields: Reason, Resolution, Followup — with edited support
+        renderField("Reason", s.reason, s.editedReason);
+        renderField("Resolution", s.resolution, s.editedResolution);
+        renderField("Followup", s.followup, s.editedFollowup);
 
-        // Resolution
-        const resolution = txt(s.resolution);
-        if (resolution) {
-          const r = document.createElement("div");
-          r.className = "checklist-drilldown__sum-field";
-          r.innerHTML = `<strong>Resolution:</strong> ${escapeHtml(resolution)}`;
-          card.append(r);
+        // Edited summary (top-level text)
+        const editedSummaryText = hasEdited(s.editedSummary) ? txt(s.editedSummary) : null;
+
+        // Dynamic extra topics — render any remaining { text/confidence } objects
+        // that aren't part of the known set
+        const knownKeys = new Set([
+          "id", "text", "description", "confidence", "status", "mediaType",
+          "language", "headline", "reason", "resolution", "followup",
+          "editedSummary", "editedReason", "editedResolution", "editedFollowup",
+          "predictedWrapupCodes", "dateCreated", "extractedEntities",
+          "communication", "participants", "selfUri", "conversation",
+        ]);
+        for (const [key, val] of Object.entries(s)) {
+          if (knownKeys.has(key)) continue;
+          // Only render objects/strings that look like topic fields
+          const topicText = txt(val);
+          if (!topicText) continue;
+          // Check for a corresponding edited version (editedXxx)
+          const editedKey = `edited${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+          renderField(key.charAt(0).toUpperCase() + key.slice(1), val, s[editedKey]);
+          knownKeys.add(editedKey); // don't re-render the edited key itself
         }
 
         // Full text / description
         const fullText = txt(s.text) || txt(s.description);
-        if (fullText) {
+        if (editedSummaryText) {
+          const t = document.createElement("div");
+          t.className = "checklist-drilldown__sum-text";
+          t.innerHTML = `${escapeHtml(editedSummaryText)} <span class="checklist-drilldown__edited-badge" title="Edited by agent">✏️ Edited</span>`;
+          card.append(t);
+          if (fullText && fullText !== editedSummaryText) {
+            const orig = document.createElement("div");
+            orig.className = "checklist-drilldown__sum-text checklist-drilldown__sum-text--original";
+            orig.innerHTML = `<strong>Original:</strong> <span class="checklist-drilldown__strikethrough">${escapeHtml(fullText)}</span>`;
+            card.append(orig);
+          }
+        } else if (fullText) {
           const t = document.createElement("div");
           t.className = "checklist-drilldown__sum-text";
           t.textContent = fullText;

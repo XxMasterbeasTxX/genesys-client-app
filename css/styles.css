@@ -954,6 +954,22 @@ body {
 .checklist-drilldown__item-name { flex: 1; }
 .checklist-drilldown__important { font-size: 14px; }
 
+.checklist-drilldown__eval {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  margin-left: 4px;
+}
+
+.checklist-drilldown__tick--green {
+  color: #22c55e;
+  font-weight: 700;
+}
+.checklist-drilldown__tick--red {
+  color: #ef4444;
+  font-weight: 700;
+}
+
 .checklist-drilldown__ai {
   font-size: 11px;
   color: var(--muted);
@@ -1020,6 +1036,36 @@ body {
   font-size: 11px;
   color: var(--muted);
   margin-top: 8px;
+}
+
+/* Edited badge (agent edits) */
+.checklist-drilldown__edited-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.checklist-drilldown__strikethrough {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.checklist-drilldown__sum-field--original {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+.checklist-drilldown__sum-text--original {
+  font-size: 12px;
+  opacity: 0.7;
 }
 
 /* ── Data Tables ──────────────────────────────────────── */
@@ -1683,6 +1729,15 @@ body {
   .checklist-drilldown__item--unticked {
     background: rgba(202,138,4,0.06);
     border-color: rgba(202,138,4,0.12);
+  }
+
+  .checklist-drilldown__tick--green { color: #16a34a; }
+  .checklist-drilldown__tick--red   { color: #dc2626; }
+
+  .checklist-drilldown__edited-badge {
+    color: #b45309;
+    background: rgba(180,83,9,0.08);
+    border-color: rgba(180,83,9,0.20);
   }
 
   /* ── Data Tables ────────────────────────────────────── */
