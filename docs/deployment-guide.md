@@ -600,7 +600,8 @@ Run through these checks after deployment:
   - [ ] Click a row with a checklist → verify drill-down shows checklist items with tick status
   - [ ] If the conversation has an AI-generated summary, verify it appears below the checklist items in the drill-down panel (showing headline, reason, resolution, full text)
   - [ ] For transferred calls, verify multiple summaries are shown ("Summary 1 of N")
-  - [ ] Test status filter buttons (All / Completed / Incomplete)
+  - [ ] Test status filter buttons (All / Completed / Incomplete / Summaries)
+  - [ ] Verify "All" shows every interaction, "Summaries" shows only interactions with AI summaries
   - [ ] Verify the completion bar chart appears above the table showing Complete vs Incomplete counts
   - [ ] After enrichment completes, verify the **⬇ Export Excel** button appears in the top-right header
   - [ ] Click Export Excel → a new tab opens with a Save button → click Save → verify a two-sheet XLSX downloads
