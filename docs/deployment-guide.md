@@ -86,7 +86,7 @@ This client authenticates users via the browser using Authorization Code + PKCE.
 2. Under **Roles**, assign the roles needed for the features being used:
    - **Telephony** → needed for trunk activity/history dashboards
    - **Analytics** → `analytics:conversationDetail:view` — needed for Agent Copilot Checklists (conversation detail queries)
-   - **Conversation** → `conversation:communication:view` — needed to fetch conversation participants and checklist data; `conversation:summary:view` — needed to display AI-generated conversation summaries
+   - **Conversation** → `conversation:communication:view` — needed to fetch conversation participants and checklist data; `conversation:summary:view` — needed to display AI-generated conversation summaries (including agent-edited versions)
    - **Assistants** → `assistants:assistant:view`, `assistants:queue:view` — needed to list copilot assistants and their queue assignments
    - **Routing** → `routing:queue:view`, `routing:queue:member:view` — needed to resolve queue names and list queue members for the agent filter
    - **Architect** → `architect:schedule:view`, `architect:scheduleGroup:view` — needed for Data Tables columns that use schedule/scheduleGroup dropdowns
@@ -597,8 +597,10 @@ Run through these checks after deployment:
   - [ ] Select a queue → verify agents cascade into the third dropdown
   - [ ] Click a period preset or set custom dates (max 31 days) and click Search
   - [ ] Confirm interactions appear and enrich with checklist data
-  - [ ] Click a row with a checklist → verify drill-down shows checklist items with tick status
-  - [ ] If the conversation has an AI-generated summary, verify it appears below the checklist items in the drill-down panel (showing headline, reason, resolution, full text)
+  - [ ] Click a row with a checklist → verify drill-down shows checklist items with separate **Agent** and **AI** tick indicators (green ✓ / red ✗)
+  - [ ] If the conversation has an AI-generated summary, verify it appears below the checklist items in the drill-down panel (showing headline, reason, resolution, followup, full text)
+  - [ ] If the agent edited any summary fields, verify the edited version is shown with a ✏️ Edited badge and the original AI value appears with strikethrough
+  - [ ] Verify any additional AI-detected topics beyond reason/resolution/followup are rendered dynamically
   - [ ] For transferred calls, verify multiple summaries are shown ("Summary 1 of N")
   - [ ] Test status filter buttons (All / Completed / Incomplete / Summaries)
   - [ ] Verify "All" shows every interaction, "Summaries" shows only interactions with AI summaries
@@ -768,7 +770,7 @@ To embed the app inside the Genesys Cloud client interface:
 ### Agent Checklists — conversation summary not showing
 
 - **Cause**: The conversation has no AI-generated summary, or the user lacks the `conversation:summary:view` permission
-- **Fix**: Summaries are only generated for conversations where Agent Copilot is active and the conversation has ended. Check the browser DevTools console for `[Summaries]` log entries — a 404 means no summary exists for that conversation; a 403 means the permission is missing. Ensure the PKCE OAuth client’s role includes **Conversation** with `conversation:summary:view`.
+- **Fix**: Summaries are only generated for conversations where Agent Copilot is active and the conversation has ended. Check the browser DevTools console for `[Summaries]` log entries — a 404 means no summary exists for that conversation; a 403 means the permission is missing. Ensure the PKCE OAuth client's role includes **Conversation** with `conversation:summary:view`. Note: edited fields (reason, resolution, followup) are part of the same summary response and require no additional permissions.
 
 ### Data Tables — "No tables found" or empty table selector
 
