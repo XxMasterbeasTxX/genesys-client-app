@@ -1232,8 +1232,24 @@ export async function render({ route, me, api }) {
           if (!topicText) continue;
           // Check for a corresponding edited version (editedXxx)
           const editedKey = `edited${key.charAt(0).toUpperCase()}${key.slice(1)}`;
-          renderField(key.charAt(0).toUpperCase() + key.slice(1), val, s[editedKey]);
+          const topicLabel = key.charAt(0).toUpperCase() + key.slice(1);
+          renderField(topicLabel, val, s[editedKey]);
           knownKeys.add(editedKey); // don't re-render the edited key itself
+
+          // Show description if present
+          if (val && typeof val === "object" && val.description) {
+            const descEl = document.createElement("div");
+            descEl.className = "checklist-drilldown__sum-field";
+            descEl.innerHTML = `<strong>${escapeHtml(topicLabel)} — Description:</strong> ${escapeHtml(val.description)}`;
+            card.append(descEl);
+          }
+          // Show outcome if present
+          if (val && typeof val === "object" && val.outcome) {
+            const outcomeEl = document.createElement("div");
+            outcomeEl.className = "checklist-drilldown__sum-field";
+            outcomeEl.innerHTML = `<strong>${escapeHtml(topicLabel)} — Outcome:</strong> ${escapeHtml(val.outcome)}`;
+            card.append(outcomeEl);
+          }
         }
 
         // Full text / description
@@ -1261,7 +1277,6 @@ export async function render({ route, me, api }) {
         meta.className = "checklist-drilldown__sum-meta";
         const metaParts = [];
         if (s.status) metaParts.push(`Status: ${s.status}`);
-        if (s.confidence != null) metaParts.push(`Confidence: ${(s.confidence * 100).toFixed(0)}%`);
         if (metaParts.length) {
           meta.textContent = metaParts.join(" · ");
           card.append(meta);
