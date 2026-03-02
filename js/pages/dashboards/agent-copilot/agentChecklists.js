@@ -1215,13 +1215,13 @@ export async function render({ route, me, api }) {
             if (original.description) {
               const descEl = document.createElement("div");
               descEl.className = "checklist-drilldown__sum-field checklist-drilldown__sum-field--sub";
-              descEl.innerHTML = `<strong>${escapeHtml(label)} \u2014 Description:</strong> ${escapeHtml(original.description)}`;
+              descEl.textContent = original.description;
               card.append(descEl);
             }
             if (original.outcome) {
               const outcomeEl = document.createElement("div");
               outcomeEl.className = "checklist-drilldown__sum-field checklist-drilldown__sum-field--sub";
-              outcomeEl.innerHTML = `<strong>${escapeHtml(label)} \u2014 Outcome:</strong> ${escapeHtml(original.outcome)}`;
+              outcomeEl.innerHTML = `<strong>Outcome:</strong> ${escapeHtml(original.outcome)}`;
               card.append(outcomeEl);
             }
           }
