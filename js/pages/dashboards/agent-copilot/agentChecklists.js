@@ -99,7 +99,7 @@ function extractMediaType(participant) {
   return null;
 }
 
-/** Extract unique wrapup code name(s) from a participant's session segments. */
+/** Extract unique wrapup code IDs from a participant's session segments. */
 function extractWrapUpCodes(participant) {
   const codes = [];
   for (const sess of participant?.sessions ?? []) {
@@ -110,6 +110,11 @@ function extractWrapUpCodes(participant) {
     }
   }
   return codes;
+}
+
+/** Resolve wrapup code IDs to display names using the cache. */
+function resolveWrapUpNames(ids, cache) {
+  return ids.map((id) => cache.get(id) ?? id);
 }
 
 /**
@@ -162,6 +167,7 @@ export async function render({ route, me, api }) {
   const enriched = new Map();     // convId → { checklists, communicationId, completion }
   const queueNameCache = new Map(); // queueId → name
   const userNameCache = new Map();  // userId → name
+  const wrapUpNameCache = new Map(); // wrapUpCodeId → name
   let statusFilter = STATUS_FILTER.ALL;
   let enrichAbort = null;          // AbortController for in-flight enrichment
   let expandedRowId = null;       // conversationId currently drilled-down
@@ -577,6 +583,12 @@ export async function render({ route, me, api }) {
 
       statusEl.textContent = `${conversations.length} interaction${conversations.length !== 1 ? "s" : ""} found — enriching checklist data…`;
 
+      // Pre-load wrapup code names (best-effort; falls back to ID on failure)
+      try {
+        const codes = await api.getAllWrapupCodes();
+        for (const c of codes) wrapUpNameCache.set(c.id, c.name);
+      } catch (_) { /* non-fatal */ }
+
       renderTable();
       enrichConversations(enrichAbort.signal);
     } catch (err) {
@@ -600,8 +612,8 @@ export async function render({ route, me, api }) {
         <th>Queue</th>
         <th>Media</th>
         <th>Duration</th>
-        <th>Wrapup</th>
         <th>Checklist</th>
+        <th>Wrapup</th>
         <th>Status</th>
       </tr>
     `;
@@ -621,7 +633,7 @@ export async function render({ route, me, api }) {
         ?? "—";
       const mediaType = agent ? extractMediaType(agent) : "—";
       const duration = agent ? extractDuration(agent) : 0;
-      const wrapUpCodes = agent ? extractWrapUpCodes(agent) : [];
+      const wrapUpCodes = agent ? resolveWrapUpNames(extractWrapUpCodes(agent), wrapUpNameCache) : [];
       const wrapUpText = wrapUpCodes.length ? wrapUpCodes.join(", ") : "—";
 
       // Cache user name from analytics data
@@ -639,8 +651,8 @@ export async function render({ route, me, api }) {
         <td>${escapeHtml(queueName)}</td>
         <td>${escapeHtml(mediaType)}</td>
         <td>${escapeHtml(fmtDuration(duration))}</td>
-        <td>${escapeHtml(wrapUpText)}</td>
         <td class="checklist-cell-name">…</td>
+        <td>${escapeHtml(wrapUpText)}</td>
         <td class="checklist-cell-status">
           <span class="checklist-badge checklist-badge--loading">…</span>
         </td>
@@ -929,7 +941,9 @@ export async function render({ route, me, api }) {
           ?? "";
         const mediaType = agent ? extractMediaType(agent) : "";
         const duration = agent ? extractDuration(agent) : 0;
-        const wrapUpExport = agent ? extractWrapUpCodes(agent).join(", ") : "";
+        const wrapUpExport = agent
+          ? resolveWrapUpNames(extractWrapUpCodes(agent), wrapUpNameCache).join(", ")
+          : "";
 
         interactionRows.push({
           "Conversation ID": convId,
@@ -938,8 +952,8 @@ export async function render({ route, me, api }) {
           "Queue": queueName,
           "Media": mediaType ?? "",
           "Duration (s)": duration ? Math.round(duration / 1000) : 0,
-          "Wrapup": wrapUpExport,
           "Checklist": info.checklists.map((c) => c.name).join(", "),
+          "Wrapup": wrapUpExport,
           "Status": info.completion === STATUS_FILTER.COMPLETE ? "Complete" : "Incomplete",
         });
       }
