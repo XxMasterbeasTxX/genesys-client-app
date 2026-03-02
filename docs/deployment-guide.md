@@ -600,7 +600,7 @@ Run through these checks after deployment:
   - [ ] Click a row with a checklist → verify drill-down shows checklist items with separate **Agent** and **AI** tick indicators (green ✓ / red ✗)
   - [ ] If the conversation has an AI-generated summary, verify it appears below the checklist items in the drill-down panel (showing headline, reason, resolution, followup, full text)
   - [ ] If the agent edited any summary fields, verify the edited version is shown with a ✏️ Edited badge and the original AI value appears with strikethrough
-  - [ ] Verify any additional AI-detected topics beyond reason/resolution/followup are rendered dynamically
+  - [ ] Verify any additional AI-detected topics beyond reason/resolution/followup are rendered dynamically, including their description and outcome fields when present
   - [ ] For transferred calls, verify multiple summaries are shown ("Summary 1 of N")
   - [ ] Test status filter buttons (All / Completed / Incomplete / Summaries)
   - [ ] Verify "All" shows every interaction, "Summaries" shows only interactions with AI summaries
