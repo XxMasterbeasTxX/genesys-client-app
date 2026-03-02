@@ -99,6 +99,19 @@ function extractMediaType(participant) {
   return null;
 }
 
+/** Extract unique wrapup code name(s) from a participant's session segments. */
+function extractWrapUpCodes(participant) {
+  const codes = [];
+  for (const sess of participant?.sessions ?? []) {
+    for (const seg of sess.segments ?? []) {
+      if (seg.wrapUpCode && !codes.includes(seg.wrapUpCode)) {
+        codes.push(seg.wrapUpCode);
+      }
+    }
+  }
+  return codes;
+}
+
 /**
  * Determine completion across ALL checklists: "complete" only if
  * every item in every checklist is ticked (by agent or model).
@@ -587,6 +600,7 @@ export async function render({ route, me, api }) {
         <th>Queue</th>
         <th>Media</th>
         <th>Duration</th>
+        <th>Wrapup</th>
         <th>Checklist</th>
         <th>Status</th>
       </tr>
@@ -607,6 +621,8 @@ export async function render({ route, me, api }) {
         ?? "—";
       const mediaType = agent ? extractMediaType(agent) : "—";
       const duration = agent ? extractDuration(agent) : 0;
+      const wrapUpCodes = agent ? extractWrapUpCodes(agent) : [];
+      const wrapUpText = wrapUpCodes.length ? wrapUpCodes.join(", ") : "—";
 
       // Cache user name from analytics data
       if (agent?.userId && agent.participantName) {
@@ -623,6 +639,7 @@ export async function render({ route, me, api }) {
         <td>${escapeHtml(queueName)}</td>
         <td>${escapeHtml(mediaType)}</td>
         <td>${escapeHtml(fmtDuration(duration))}</td>
+        <td>${escapeHtml(wrapUpText)}</td>
         <td class="checklist-cell-name">…</td>
         <td class="checklist-cell-status">
           <span class="checklist-badge checklist-badge--loading">…</span>
@@ -912,6 +929,7 @@ export async function render({ route, me, api }) {
           ?? "";
         const mediaType = agent ? extractMediaType(agent) : "";
         const duration = agent ? extractDuration(agent) : 0;
+        const wrapUpExport = agent ? extractWrapUpCodes(agent).join(", ") : "";
 
         interactionRows.push({
           "Conversation ID": convId,
@@ -920,6 +938,7 @@ export async function render({ route, me, api }) {
           "Queue": queueName,
           "Media": mediaType ?? "",
           "Duration (s)": duration ? Math.round(duration / 1000) : 0,
+          "Wrapup": wrapUpExport,
           "Checklist": info.checklists.map((c) => c.name).join(", "),
           "Status": info.completion === STATUS_FILTER.COMPLETE ? "Complete" : "Incomplete",
         });
@@ -1283,6 +1302,14 @@ export async function render({ route, me, api }) {
         if (metaParts.length) {
           meta.textContent = metaParts.join(" · ");
           card.append(meta);
+        }
+
+        // Predicted wrapup codes
+        if (Array.isArray(s.predictedWrapupCodes) && s.predictedWrapupCodes.length) {
+          const wrapDiv = document.createElement("div");
+          wrapDiv.className = "checklist-drilldown__sum-field";
+          wrapDiv.innerHTML = `<strong>Suggested wrapup:</strong> ${escapeHtml(s.predictedWrapupCodes.map((w) => w.name).join(", "))}`;
+          card.append(wrapDiv);
         }
 
         drillPanel.append(card);
