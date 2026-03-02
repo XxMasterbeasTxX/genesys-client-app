@@ -1208,15 +1208,34 @@ export async function render({ route, me, api }) {
           card.append(hl);
         }
 
-        // Known fields: Reason, Resolution, Followup — with edited support
-        renderField("Reason", s.reason, s.editedReason);
-        renderField("Resolution", s.resolution, s.editedResolution);
-        renderField("Followup", s.followup, s.editedFollowup);
+        // Helper: render a topic field (text with edited support) + optional description + outcome
+        const renderTopicField = (label, original, edited) => {
+          renderField(label, original, edited);
+          if (original && typeof original === "object") {
+            if (original.description) {
+              const descEl = document.createElement("div");
+              descEl.className = "checklist-drilldown__sum-field checklist-drilldown__sum-field--sub";
+              descEl.innerHTML = `<strong>${escapeHtml(label)} \u2014 Description:</strong> ${escapeHtml(original.description)}`;
+              card.append(descEl);
+            }
+            if (original.outcome) {
+              const outcomeEl = document.createElement("div");
+              outcomeEl.className = "checklist-drilldown__sum-field checklist-drilldown__sum-field--sub";
+              outcomeEl.innerHTML = `<strong>${escapeHtml(label)} \u2014 Outcome:</strong> ${escapeHtml(original.outcome)}`;
+              card.append(outcomeEl);
+            }
+          }
+        };
+
+        // Known fields: Reason, Resolution, Followup — with edited support + description/outcome
+        renderTopicField("Reason", s.reason, s.editedReason);
+        renderTopicField("Resolution", s.resolution, s.editedResolution);
+        renderTopicField("Followup", s.followup, s.editedFollowup);
 
         // Edited summary (top-level text)
         const editedSummaryText = hasEdited(s.editedSummary) ? txt(s.editedSummary) : null;
 
-        // Dynamic extra topics — render any remaining { text/confidence } objects
+        // Dynamic extra topics — render any remaining { text/... } objects
         // that aren't part of the known set
         const knownKeys = new Set([
           "id", "text", "description", "confidence", "status", "mediaType",
@@ -1232,24 +1251,8 @@ export async function render({ route, me, api }) {
           if (!topicText) continue;
           // Check for a corresponding edited version (editedXxx)
           const editedKey = `edited${key.charAt(0).toUpperCase()}${key.slice(1)}`;
-          const topicLabel = key.charAt(0).toUpperCase() + key.slice(1);
-          renderField(topicLabel, val, s[editedKey]);
+          renderTopicField(key.charAt(0).toUpperCase() + key.slice(1), val, s[editedKey]);
           knownKeys.add(editedKey); // don't re-render the edited key itself
-
-          // Show description if present
-          if (val && typeof val === "object" && val.description) {
-            const descEl = document.createElement("div");
-            descEl.className = "checklist-drilldown__sum-field";
-            descEl.innerHTML = `<strong>${escapeHtml(topicLabel)} — Description:</strong> ${escapeHtml(val.description)}`;
-            card.append(descEl);
-          }
-          // Show outcome if present
-          if (val && typeof val === "object" && val.outcome) {
-            const outcomeEl = document.createElement("div");
-            outcomeEl.className = "checklist-drilldown__sum-field";
-            outcomeEl.innerHTML = `<strong>${escapeHtml(topicLabel)} — Outcome:</strong> ${escapeHtml(val.outcome)}`;
-            card.append(outcomeEl);
-          }
         }
 
         // Full text / description
