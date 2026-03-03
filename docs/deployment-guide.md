@@ -87,6 +87,7 @@ This client authenticates users via the browser using Authorization Code + PKCE.
    - **Telephony** → needed for trunk activity/history dashboards
    - **Analytics** → `analytics:conversationDetail:view` — needed for Agent Copilot Checklists (conversation detail queries)
    - **Conversation** → `conversation:communication:view` — needed to fetch conversation participants and checklist data; `conversation:summary:view` — needed to display AI-generated conversation summaries (including agent-edited versions)
+   - **Recording** → `recording:recording:view` — needed for inline audio playback in the Interaction Detail drill-down; `recording:screenRecording:view` — additional permission if screen recordings should be playable
    - **Assistants** → `assistants:assistant:view`, `assistants:queue:view` — needed to list copilot assistants and their queue assignments
    - **Routing** → `routing:queue:view`, `routing:queue:member:view` — needed to resolve queue names and list queue members for the agent filter
    - **Architect** → `architect:schedule:view`, `architect:scheduleGroup:view` — needed for Data Tables columns that use schedule/scheduleGroup dropdowns
@@ -407,6 +408,7 @@ These files contain customer-tunable settings. Adjust as needed:
 | `EXPORT_INTERACTION_COLS` | 8 columns | Column widths for Sheet 1 (Interactions) |
 | `EXPORT_ITEM_COLS` | 7 columns | Column widths for Sheet 2 (Checklist Items) |
 | `LABELS` | Various | All UI button text, badge labels, and chart axis labels |
+| `LABELS.statusAgentChecked` | `✋ Agent Checked` | Label for the Agent Checked toggle filter button |
 
 **`js/pages/data-tables/dataTablesConfig.js`** — Data Tables Update:
 
@@ -598,12 +600,17 @@ Run through these checks after deployment:
   - [ ] Click a period preset or set custom dates (max 31 days) and click Search
   - [ ] Confirm interactions appear and enrich with checklist data
   - [ ] Click a row with a checklist → verify drill-down shows checklist items with separate **Agent** and **AI** tick indicators (green ✓ / red ✗)
+  - [ ] Verify the Interaction Detail panel opens with three collapsible sections: **🎧 Recording** (expanded), **Checklists** (expanded), **Conversation Summary** (collapsed)
+  - [ ] Click the **🎧 Play Recording** button → verify the audio player loads and plays the recording; if multiple segments exist, verify they are labelled Part 1, Part 2 etc.
+  - [ ] Verify that selecting a row **collapses the search results table** automatically, and closing the detail panel (✕) **re-expands** it
+  - [ ] Verify the **▼ Search Results** toggle header collapses/expands the table independently without resetting filters or data
   - [ ] If the conversation has an AI-generated summary, verify it appears below the checklist items in the drill-down panel (showing headline, reason, resolution, followup, full text)
   - [ ] If the agent edited any summary fields, verify the edited version is shown with a ✏️ Edited badge and the original AI value appears with strikethrough
   - [ ] Verify any additional AI-detected topics beyond reason/resolution/followup are rendered dynamically, including their description and outcome fields when present
   - [ ] For transferred calls, verify multiple summaries are shown ("Summary 1 of N")
   - [ ] Test status filter buttons (All / Completed / Incomplete / Summaries)
   - [ ] Verify "All" shows every interaction, "Summaries" shows only interactions with AI summaries
+  - [ ] Verify the **✋ Agent Checked** toggle button ANDs with the active status filter (e.g. select "Incomplete" then enable Agent Checked → only incomplete interactions where the agent manually ticked an item should appear)
   - [ ] Verify the completion bar chart appears above the table showing Complete vs Incomplete counts
   - [ ] After enrichment completes, verify the **⬇ Export Excel** button appears in the top-right header
   - [ ] Click Export Excel → a new tab opens with a Save button → click Save → verify a two-sheet XLSX downloads
@@ -766,6 +773,11 @@ To embed the app inside the Genesys Cloud client interface:
 
 - **Cause**: No enriched checklist data yet, or Chart.js not loaded
 - **Fix**: The chart only appears after at least one interaction has been enriched with checklist data. Verify Chart.js loads from the CDN (`cdn.jsdelivr.net/npm/chart.js@4`). Chart styling can be adjusted in `CHART_CONFIG` within `checklistConfig.js`; chart container sizing is in `css/styles.css` (`.checklist-chart-wrap`).
+
+### Agent Checklists — recording shows "No recording available"
+
+- **Cause**: The OAuth client lacks `recording:recording:view` permission, or the recording is archived/still processing
+- **Fix**: Ensure the PKCE OAuth client's role includes **Recording** with `recording:recording:view`. For screen recordings, also add `recording:screenRecording:view`. If the recording was recently created it may still be processing — wait a few minutes and try again. Archived recordings cannot be played inline.
 
 ### Agent Checklists — conversation summary not showing
 
