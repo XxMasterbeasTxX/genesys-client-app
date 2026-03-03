@@ -1148,9 +1148,16 @@ export async function render({ route, me, api }) {
               ? [stubs]
               : [];
 
-        console.log(`[Recording] stubList (${stubList.length}):`, stubList.map((r) => ({ id: r.id, fileState: r.fileState, mediaType: r.mediaType })));
+        console.log(`[Recording] stubList (${stubList.length}):`, stubList.map((r) => ({
+          id: r.id, fileState: r.fileState, deletedDate: r.deletedDate, media: r.media, mediaType: r.mediaType,
+        })));
 
-        const available = stubList.filter((r) => r.fileState !== "DELETED" && r.id);
+        // 'media' is used on the list endpoint; 'mediaType' on single-recording endpoint
+        // Filter only records that have an id and aren't explicitly marked deleted
+        const available = stubList.filter(
+          (r) => r.id && !r.deletedDate && r.fileState !== "DELETED",
+        );
+        console.log(`[Recording] available count: ${available.length}`);
 
         if (!available.length) {
           playerContainer.innerHTML =
@@ -1166,8 +1173,10 @@ export async function render({ route, me, api }) {
         for (const stub of available) {
           const label = document.createElement("div");
           label.className = "checklist-drilldown__recording-label";
+          // list endpoint uses 'media'; single endpoint uses 'mediaType'
+          const mediaTypeLabel = stub.media ?? stub.mediaType ?? "";
           const parts = [];
-          if (stub.mediaType) parts.push(stub.mediaType);
+          if (mediaTypeLabel) parts.push(mediaTypeLabel);
           if (stub.durationMilliseconds) parts.push(fmtDuration(stub.durationMilliseconds));
 
           if (stub.fileState === "ARCHIVED") {
@@ -1179,13 +1188,18 @@ export async function render({ route, me, api }) {
 
           try {
             const rec = await api.getConversationRecording(convId, stub.id);
-            if (!rec?.mediaUri) continue;
+            console.log(`[Recording] single fetch id=${stub.id}:`, { mediaUri: rec?.mediaUri, fileState: rec?.fileState, mediaType: rec?.mediaType, media: rec?.media });
+            const uri = rec?.mediaUri ?? rec?.media?.downloadUrl ?? null;
+            if (!uri) {
+              console.warn(`[Recording] No mediaUri for recording ${stub.id}. Full response:`, rec);
+              continue;
+            }
 
             label.textContent = parts.join(" · ");
-            const isScreen = rec.mediaType === "screen";
+            const isScreen = (rec.mediaType ?? rec.media ?? "") === "screen";
             const media = document.createElement(isScreen ? "video" : "audio");
             media.controls = true;
-            media.src = rec.mediaUri;
+            media.src = uri;
             media.className = "checklist-drilldown__recording-media";
             playerContainer.append(label, media);
             playableCount++;
