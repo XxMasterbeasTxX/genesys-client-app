@@ -158,6 +158,7 @@ export const LABELS = Object.freeze({
   statusComplete: "✅ Completed",
   statusIncomplete: "⚠️ Incomplete",
   statusSummaries: "📝 Summaries",
+  statusAgentChecked: "✋ Agent Checked",
   searchBtn: "🔍 Search",
   exportBtn: "⬇ Export Excel",
   applyBtn: "Apply",

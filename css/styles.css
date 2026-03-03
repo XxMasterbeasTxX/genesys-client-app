@@ -782,6 +782,24 @@ body {
   color: #93bbfd;
 }
 
+/* Agent-Checked toggle button (independent of status filter) */
+.checklist-filter-sep {
+  color: var(--border);
+  font-size: 14px;
+  line-height: 1;
+  align-self: center;
+  user-select: none;
+  margin: 0 2px;
+}
+.checklist-agent-btn {
+  font-size: 12px;
+}
+.checklist-agent-btn--active {
+  background: rgba(245,158,11,0.2);
+  border-color: rgba(245,158,11,0.45);
+  color: #fbbf24;
+}
+
 .checklist-export-btn {
   margin-left: auto;
   background: rgba(74,222,128,0.15);

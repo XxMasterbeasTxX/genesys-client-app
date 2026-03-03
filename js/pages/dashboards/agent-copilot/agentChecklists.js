@@ -169,6 +169,7 @@ export async function render({ route, me, api }) {
   const userNameCache = new Map();  // userId → name
   const wrapUpNameCache = new Map(); // wrapUpCodeId → name
   let statusFilter = STATUS_FILTER.ALL;
+  let agentCheckedFilter = false;
   let enrichAbort = null;          // AbortController for in-flight enrichment
   let expandedRowId = null;       // conversationId currently drilled-down
 
@@ -305,6 +306,24 @@ export async function render({ route, me, api }) {
     return btn;
   });
   statusBar.append(...statusBtns);
+
+  // Independent toggle: only show rows where agent ticked ≥1 item
+  const agentCheckedSep = document.createElement("span");
+  agentCheckedSep.className = "checklist-filter-sep";
+  agentCheckedSep.setAttribute("aria-hidden", "true");
+  agentCheckedSep.textContent = "|";
+
+  const agentCheckedBtn = document.createElement("button");
+  agentCheckedBtn.type = "button";
+  agentCheckedBtn.className = "btn btn-sm checklist-agent-btn";
+  agentCheckedBtn.textContent = LABELS.statusAgentChecked;
+  agentCheckedBtn.addEventListener("click", () => {
+    agentCheckedFilter = !agentCheckedFilter;
+    agentCheckedBtn.classList.toggle("checklist-agent-btn--active", agentCheckedFilter);
+    applyTableFilter();
+  });
+
+  statusBar.append(agentCheckedSep, agentCheckedBtn);
 
   filterBar.append(filterRow1, filterRow2, statusBar);
 
@@ -693,28 +712,22 @@ export async function render({ route, me, api }) {
     for (const row of rows) {
       const info = enriched.get(row.dataset.convId);
 
+      // Step 1: status filter (mutually exclusive)
       if (statusFilter === STATUS_FILTER.ALL) {
-        // Show every interaction regardless of checklist/summary data
         row.hidden = false;
-        continue;
+      } else if (statusFilter === STATUS_FILTER.SUMMARIES) {
+        row.hidden = !info ? true : !info.summaries?.length;
+      } else {
+        // COMPLETE / INCOMPLETE
+        row.hidden = !info ? true : info.completion !== statusFilter;
       }
 
-      if (statusFilter === STATUS_FILTER.SUMMARIES) {
-        // Show only interactions that have at least one summary
-        if (!info) {
-          row.hidden = true; // still loading
-        } else {
-          row.hidden = !info.summaries?.length;
-        }
-        continue;
+      // Step 2: agent-checked filter (AND on top of status)
+      if (agentCheckedFilter && !row.hidden) {
+        row.hidden = !info?.checklists?.some(
+          (cl) => cl.checklistItems?.some((item) => item.stateFromAgent === TICK_STATE.TICKED),
+        );
       }
-
-      // Complete / Incomplete filters
-      if (!info) {
-        row.hidden = true;
-        continue;
-      }
-      row.hidden = info.completion !== statusFilter;
     }
     updateChart();
   }
