@@ -23,8 +23,9 @@ This document covers how to deliver subsets of the Genesys Client App to custome
 
 The developer app contains multiple features:
 
-- **Agent Copilot** — Checklist history, completion tracking, Excel export
+- **Agent Copilot** — Checklist history, completion tracking, Excel export, inline recording playback, Agent Checked filter, collapsible drill-down UI
 - **Trunk Dashboards** — Live activity, history, alerts/SMS
+- **Data Tables** — Config-driven editor for Genesys Cloud Data Tables (supervisor and administrator modes)
 - **Future features** — additional dashboard pages
 
 Customers may purchase only a subset. They should **not** have access to code for features they haven't paid for — both to protect IP and to avoid confusion.
@@ -164,44 +165,70 @@ js/
 
 | Include | Notes |
 | --- | --- |
-| `js/pages/dashboards/agent-copilot/` | All files in folder |
+| `js/pages/dashboards/agent-copilot/agentChecklists.js` | Main checklist + summaries view |
+| `js/pages/dashboards/agent-copilot/checklistConfig.js` | All feature-level tunables and labels |
+| `js/pages/dashboards/agent-copilot/performance.js` | Disabled page (stub) — include only if planning to enable it |
 | `js/lib/xlsx.full.min.js` | For Excel export |
 | `download.html` | Excel download helper page |
 
 **Does NOT need:** `api/` folder, Azure Functions, Azure Storage, backend OAuth client, `notificationService.js`
 
-**Genesys permissions required:** Analytics, Conversation, Assistants, Routing
+**Genesys permissions required:** Analytics, Conversation, Assistants, Routing, Recording
+
+> The **Recording** permission (`recording:recording:view`) is required for the inline recording playback button in the Interaction Detail drill-down. Add `recording:screenRecording:view` if screen recordings should also be playable. These permissions can be omitted if recording playback is not needed — the button will show an error but will not break any other functionality.
 
 ### Trunks Only
 
 | Include | Notes |
 | --- | --- |
-| `js/pages/dashboards/trunks/` | All files in folder |
+| `js/pages/dashboards/trunks/activity.js` | Live trunk activity dashboard |
+| `js/pages/dashboards/trunks/history.js` | Historical peak-call chart |
+| `js/pages/dashboards/trunks/alertConfig.js` | In-app alert configuration panel |
+| `js/pages/dashboards/trunks/trunkConfig.js` | Feature-level tunables |
+| `js/pages/dashboards/trunks/historyConfig.js` | History feature tunables |
 | `js/services/notificationService.js` | WebSocket for live updates |
 | `api/` | Full Azure Functions backend |
 
-**Does NOT need:** `js/lib/xlsx.full.min.js`, `download.html`, agent-copilot folder
+**Does NOT need:** `js/lib/xlsx.full.min.js`, `download.html`, `agent-copilot/` folder, `data-tables/` folder
 
 **Genesys permissions required:** Telephony, Integrations (for alerts)
 
+---
+
+### Data Tables Only
+
+| Include | Notes |
+| --- | --- |
+| `js/pages/data-tables/update.js` | Main data table editor |
+| `js/pages/data-tables/dataTablesConfig.js` | Per-table validation rules |
+| `js/pages/data-tables/dataTablesConfig.example.js` | Optional — documented example config |
+
+**Does NOT need:** `api/` folder, Azure Functions, Azure Storage, backend OAuth client, `notificationService.js`, `js/lib/xlsx.full.min.js`, `download.html`
+
+**Genesys permissions required:** Architect (`architect:datatable:view`, `architect:datatable:edit`), Routing (`routing:queue:view`, `routing:skill:view`, `routing:language:view`, `routing:wrapupCode:view`), Architect (`architect:schedule:view`, `architect:scheduleGroup:view`)
+
 ### Full App
 
-Include everything from both feature sets.
+Include everything from all feature sets. See [deployment-guide.md](deployment-guide.md) for the complete permission list.
 
 ---
 
 ## 8. Customer Deployment Differences
 
-| Item | Full App | Copilot Only | Trunks Only |
-| --- | --- | --- | --- |
-| Azure Static Web App | ✅ | ✅ | ✅ |
-| Azure Function App | ✅ | ❌ | ✅ |
-| Azure Storage Account | ✅ | ❌ | ✅ |
-| Backend OAuth client | ✅ | ❌ | ✅ |
-| PKCE OAuth client | ✅ | ✅ | ✅ |
-| `functionsBase` in config | Set | Remove/empty | Set |
-| GitHub Actions (SPA) | ✅ | ✅ | ✅ |
-| GitHub Actions (Functions) | ✅ | ❌ | ✅ |
+| Item | Full App | Copilot Only | Trunks Only | Data Tables Only |
+| --- | --- | --- | --- | --- |
+| Azure Static Web App | ✅ | ✅ | ✅ | ✅ |
+| Azure Function App | ✅ | ❌ | ✅ | ❌ |
+| Azure Storage Account | ✅ | ❌ | ✅ | ❌ |
+| Backend OAuth client | ✅ | ❌ | ✅ | ❌ |
+| PKCE OAuth client | ✅ | ✅ | ✅ | ✅ |
+| `functionsBase` in config | Set | Remove/empty | Set | Remove/empty |
+| GitHub Actions (SPA) | ✅ | ✅ | ✅ | ✅ |
+| GitHub Actions (Functions) | ✅ | ❌ | ✅ | ❌ |
+| `recording:recording:view` permission | ✅ | ✅ | ❌ | ❌ |
+| Analytics permission | ✅ | ✅ | ❌ | ❌ |
+| Telephony permission | ✅ | ❌ | ✅ | ❌ |
+| Architect permission | ✅ | ❌ | ❌ | ✅ |
 
 ---
 
