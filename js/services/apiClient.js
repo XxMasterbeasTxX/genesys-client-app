@@ -158,16 +158,25 @@ export function createApiClient(getAccessToken) {
       request(`/api/v2/conversations/${conversationId}/summaries`),
 
     /**
-     * Fetch all recordings for a conversation.
-     * Returns an array of recording objects, each with a `mediaUri` presigned S3 URL
-     * valid for ~5 minutes. Always fetch on demand — never cache the URL.
-     * formatId controls the audio codec; MP3 has the widest browser support.
+     * List all recording stubs for a conversation (no format/transcode requested).
+     * Returns metadata: id, fileState, mediaType, durationMilliseconds, etc.
+     * Does NOT include a playable mediaUri — use getConversationRecording() for that.
+     */
+    getConversationRecordings: (conversationId) =>
+      request(`/api/v2/conversations/${conversationId}/recordings`),
+
+    /**
+     * Fetch a single recording with a presigned playable URL.
+     * Triggers transcoding to the requested format and waits up to maxWaitMs.
+     * Returns a recording object with `mediaUri` (presigned S3 URL, valid ~5 min).
+     * Always call on demand — never cache the URL.
      * @param {string} conversationId
+     * @param {string} recordingId
      * @param {string} [formatId='MP3'] WAV | WEBM | WAV_ULAW | OGG_VORBIS | OGG_OPUS | MP3
      */
-    getConversationRecordings: (conversationId, formatId = "MP3") =>
+    getConversationRecording: (conversationId, recordingId, formatId = "MP3") =>
       request(
-        `/api/v2/conversations/${conversationId}/recordings?formatId=${formatId}&maxWaitMs=5000`,
+        `/api/v2/conversations/${conversationId}/recordings/${recordingId}?formatId=${formatId}&maxWaitMs=5000`,
       ),
 
     // ── Data Tables ─────────────────────────────────────────────

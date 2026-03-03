@@ -1135,8 +1135,13 @@ export async function render({ route, me, api }) {
       playBtn.disabled = true;
       playBtn.textContent = "⏳ Loading…";
       try {
-        const recordings = await api.getConversationRecordings(convId);
-        if (!recordings?.length) {
+        // Step 1: list recording stubs (no format/transcode, fast)
+        const stubs = await api.getConversationRecordings(convId);
+        const available = (stubs ?? []).filter(
+          (r) => r.fileState !== "DELETED" && r.id,
+        );
+
+        if (!available.length) {
           playerContainer.innerHTML =
             `<span class="checklist-drilldown__recording-msg">No recording available for this interaction.</span>`;
           playBtn.textContent = "🎧 No Recording";
@@ -1146,29 +1151,36 @@ export async function render({ route, me, api }) {
         playerContainer.innerHTML = "";
         let playableCount = 0;
 
-        for (const rec of recordings) {
+        // Step 2: fetch each recording individually to obtain the presigned mediaUri
+        for (const stub of available) {
           const label = document.createElement("div");
           label.className = "checklist-drilldown__recording-label";
           const parts = [];
-          if (rec.mediaType) parts.push(rec.mediaType);
-          if (rec.durationMilliseconds) parts.push(fmtDuration(rec.durationMilliseconds));
+          if (stub.mediaType) parts.push(stub.mediaType);
+          if (stub.durationMilliseconds) parts.push(fmtDuration(stub.durationMilliseconds));
 
-          if (rec.fileState === "ARCHIVED") {
+          if (stub.fileState === "ARCHIVED") {
             parts.push("Archived — not directly playable");
             label.textContent = parts.join(" · ");
             playerContainer.append(label);
             continue;
           }
-          if (rec.fileState === "DELETED" || !rec.mediaUri) continue;
 
-          label.textContent = parts.join(" · ");
-          const isScreen = rec.mediaType === "screen";
-          const media = document.createElement(isScreen ? "video" : "audio");
-          media.controls = true;
-          media.src = rec.mediaUri;
-          media.className = "checklist-drilldown__recording-media";
-          playerContainer.append(label, media);
-          playableCount++;
+          try {
+            const rec = await api.getConversationRecording(convId, stub.id);
+            if (!rec?.mediaUri) continue;
+
+            label.textContent = parts.join(" · ");
+            const isScreen = rec.mediaType === "screen";
+            const media = document.createElement(isScreen ? "video" : "audio");
+            media.controls = true;
+            media.src = rec.mediaUri;
+            media.className = "checklist-drilldown__recording-media";
+            playerContainer.append(label, media);
+            playableCount++;
+          } catch (recErr) {
+            console.warn(`[Recording] Could not fetch recording ${stub.id}:`, recErr.message ?? recErr);
+          }
         }
 
         if (!playableCount && !playerContainer.children.length) {
