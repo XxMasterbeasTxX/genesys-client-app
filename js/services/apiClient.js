@@ -157,6 +157,19 @@ export function createApiClient(getAccessToken) {
     getConversationSummaries: (conversationId) =>
       request(`/api/v2/conversations/${conversationId}/summaries`),
 
+    /**
+     * Fetch all recordings for a conversation.
+     * Returns an array of recording objects, each with a `mediaUri` presigned S3 URL
+     * valid for ~5 minutes. Always fetch on demand — never cache the URL.
+     * formatId controls the audio codec; MP3 has the widest browser support.
+     * @param {string} conversationId
+     * @param {string} [formatId='MP3'] WAV | WEBM | WAV_ULAW | OGG_VORBIS | OGG_OPUS | MP3
+     */
+    getConversationRecordings: (conversationId, formatId = "MP3") =>
+      request(
+        `/api/v2/conversations/${conversationId}/recordings?formatId=${formatId}&maxWaitMs=5000`,
+      ),
+
     // ── Data Tables ─────────────────────────────────────────────
     /** Fetch ALL data tables the user can view (auto-paginated, with schema). */
     getDataTables: async () => {
