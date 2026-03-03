@@ -1137,9 +1137,20 @@ export async function render({ route, me, api }) {
       try {
         // Step 1: list recording stubs (no format/transcode, fast)
         const stubs = await api.getConversationRecordings(convId);
-        const available = (stubs ?? []).filter(
-          (r) => r.fileState !== "DELETED" && r.id,
-        );
+        console.log(`[Recording] convId=${convId} stubs raw:`, stubs);
+
+        // The API returns a plain array; guard against null/unexpected shapes
+        const stubList = Array.isArray(stubs)
+          ? stubs
+          : Array.isArray(stubs?.entities)
+            ? stubs.entities
+            : stubs
+              ? [stubs]
+              : [];
+
+        console.log(`[Recording] stubList (${stubList.length}):`, stubList.map((r) => ({ id: r.id, fileState: r.fileState, mediaType: r.mediaType })));
+
+        const available = stubList.filter((r) => r.fileState !== "DELETED" && r.id);
 
         if (!available.length) {
           playerContainer.innerHTML =

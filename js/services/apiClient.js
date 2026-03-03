@@ -161,9 +161,10 @@ export function createApiClient(getAccessToken) {
      * List all recording stubs for a conversation (no format/transcode requested).
      * Returns metadata: id, fileState, mediaType, durationMilliseconds, etc.
      * Does NOT include a playable mediaUri — use getConversationRecording() for that.
+     * maxWaitMs is required; without it the API returns empty for un-cached recordings.
      */
     getConversationRecordings: (conversationId) =>
-      request(`/api/v2/conversations/${conversationId}/recordings`),
+      request(`/api/v2/conversations/${conversationId}/recordings?maxWaitMs=5000`),
 
     /**
      * Fetch a single recording with a presigned playable URL.
