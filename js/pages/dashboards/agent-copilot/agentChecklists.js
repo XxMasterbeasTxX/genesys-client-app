@@ -1188,10 +1188,15 @@ export async function render({ route, me, api }) {
 
           try {
             const rec = await api.getConversationRecording(convId, stub.id);
-            console.log(`[Recording] single fetch id=${stub.id}:`, { mediaUri: rec?.mediaUri, fileState: rec?.fileState, mediaType: rec?.mediaType, media: rec?.media });
-            const uri = rec?.mediaUri ?? rec?.media?.downloadUrl ?? null;
+            console.log(`[Recording] single fetch id=${stub.id}:`, { mediaUris: rec?.mediaUris, fileState: rec?.fileState, media: rec?.media });
+            // Genesys returns mediaUris as a map: { MP3: { mediaUri: "https://..." }, ... }
+            const uri = rec?.mediaUris?.MP3?.mediaUri
+              ?? rec?.mediaUris?.WEBM?.mediaUri
+              ?? rec?.mediaUris?.WAV?.mediaUri
+              ?? Object.values(rec?.mediaUris ?? {})[0]?.mediaUri
+              ?? null;
             if (!uri) {
-              console.warn(`[Recording] No mediaUri for recording ${stub.id}. Full response:`, rec);
+              console.warn(`[Recording] No uri found for recording ${stub.id}. mediaUris:`, rec?.mediaUris, 'Full response:', rec);
               continue;
             }
 
