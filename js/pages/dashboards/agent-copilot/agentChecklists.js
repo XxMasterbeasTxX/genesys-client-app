@@ -335,6 +335,27 @@ export async function render({ route, me, api }) {
   const tableWrap = document.createElement("div");
   tableWrap.className = "checklist-table-wrap";
 
+  // Collapsible wrapper around the results table
+  const resultsChevron = document.createElement("span");
+  resultsChevron.className = "checklist-results-chevron";
+  resultsChevron.textContent = "▼";
+
+  const resultsToggle = document.createElement("button");
+  resultsToggle.type = "button";
+  resultsToggle.className = "checklist-results-toggle";
+  resultsToggle.setAttribute("aria-expanded", "true");
+  resultsToggle.append(resultsChevron, document.createTextNode(" Search Results"));
+  resultsToggle.addEventListener("click", () => {
+    const isOpen = !tableWrap.hidden;
+    tableWrap.hidden = isOpen;
+    resultsToggle.setAttribute("aria-expanded", String(!isOpen));
+    resultsChevron.textContent = isOpen ? "▶" : "▼";
+  });
+
+  const resultsSection = document.createElement("div");
+  resultsSection.className = "checklist-results-section";
+  resultsSection.append(resultsToggle, tableWrap);
+
   // ── Chart ──────────────────────────────────────────────
   const chartWrap = document.createElement("div");
   chartWrap.className = "checklist-chart-wrap";
@@ -361,7 +382,7 @@ export async function render({ route, me, api }) {
   topArea.className = "checklist-top-area";
   topArea.append(filterBar, chartWrap);
 
-  root.append(header, topArea, statusEl, tableWrap, drillPanel);
+  root.append(header, topArea, statusEl, resultsSection, drillPanel);
 
   // ── Preset highlighting ────────────────────────────────
   function setActivePreset(days) {
@@ -1058,6 +1079,9 @@ export async function render({ route, me, api }) {
 
     expandedRowId = convId;
     highlightRow(convId);
+    tableWrap.hidden = true;
+    resultsToggle.setAttribute("aria-expanded", "false");
+    resultsChevron.textContent = "▶";
 
     const info = enriched.get(convId);
     const hasChecklists = info?.checklists?.length > 0;
@@ -1080,6 +1104,9 @@ export async function render({ route, me, api }) {
           drillPanel.hidden = true;
           expandedRowId = null;
           highlightRow(null);
+          tableWrap.hidden = false;
+          resultsToggle.setAttribute("aria-expanded", "true");
+          resultsChevron.textContent = "▼";
         });
       return;
     }
@@ -1094,6 +1121,36 @@ export async function render({ route, me, api }) {
         row.dataset.convId === convId,
       );
     }
+  }
+
+  function makeCollapsible(title, content, expanded = true) {
+    const wrap = document.createElement("div");
+    wrap.className = "checklist-drilldown__collapsible";
+
+    const chevron = document.createElement("span");
+    chevron.className = "checklist-drilldown__collapsible-chevron";
+    chevron.textContent = expanded ? "▼" : "▶";
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "checklist-drilldown__collapsible-toggle";
+    toggle.setAttribute("aria-expanded", String(expanded));
+    toggle.append(chevron, document.createTextNode(" " + title));
+
+    const body = document.createElement("div");
+    body.className = "checklist-drilldown__collapsible-body";
+    body.hidden = !expanded;
+    body.append(content);
+
+    toggle.addEventListener("click", () => {
+      const isOpen = !body.hidden;
+      body.hidden = isOpen;
+      toggle.setAttribute("aria-expanded", String(!isOpen));
+      chevron.textContent = isOpen ? "▶" : "▼";
+    });
+
+    wrap.append(toggle, body);
+    return wrap;
   }
 
   function renderDrillDown(convId, checklists, summaries) {
@@ -1113,6 +1170,9 @@ export async function render({ route, me, api }) {
       drillPanel.hidden = true;
       expandedRowId = null;
       highlightRow(null);
+      tableWrap.hidden = false;
+      resultsToggle.setAttribute("aria-expanded", "true");
+      resultsChevron.textContent = "▼";
     });
     hdr.append(h3, closeBtn);
     drillPanel.append(hdr);
@@ -1234,8 +1294,9 @@ export async function render({ route, me, api }) {
     });
 
     recSection.append(playBtn, playerContainer);
-    drillPanel.append(recSection);
+    drillPanel.append(makeCollapsible("🎧 Recording", recSection, true));
 
+    const checklistsBody = document.createElement("div");
     for (const cl of checklists) {
       const section = document.createElement("div");
       section.className = "checklist-drilldown__section";
@@ -1296,17 +1357,16 @@ export async function render({ route, me, api }) {
       }
 
       section.append(itemList);
-      drillPanel.append(section);
+      checklistsBody.append(section);
     }
+    drillPanel.append(makeCollapsible("Checklists", checklistsBody, true));
 
     // ── Conversation Summaries ──────────────────────────
     if (summaries.length) {
-      const sumHeader = document.createElement("h3");
-      sumHeader.className = "checklist-drilldown__sum-heading";
-      sumHeader.textContent = summaries.length === 1
+      const sumTitle = summaries.length === 1
         ? "Conversation Summary"
         : `Conversation Summaries (${summaries.length})`;
-      drillPanel.append(sumHeader);
+      const sumBody = document.createElement("div");
 
       summaries.forEach((s, idx) => {
         const card = document.createElement("div");
@@ -1445,8 +1505,9 @@ export async function render({ route, me, api }) {
           card.append(wrapDiv);
         }
 
-        drillPanel.append(card);
+        sumBody.append(card);
       });
+      drillPanel.append(makeCollapsible(sumTitle, sumBody, false));
     }
   }
 

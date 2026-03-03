@@ -828,6 +828,26 @@ body {
 /* ── Table ───────────────────────────────────────────────── */
 .checklist-table-wrap { overflow-x: auto; }
 
+/* Collapsible search-results section */
+.checklist-results-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 2px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: inherit;
+  text-align: left;
+  margin-bottom: 8px;
+}
+.checklist-results-toggle:hover { opacity: 0.7; }
+.checklist-results-chevron { font-size: 10px; width: 12px; flex-shrink: 0; }
+
 .checklist-table {
   width: 100%;
   border-collapse: collapse;
@@ -902,6 +922,37 @@ body {
 .checklist-drilldown__close {
   font-size: 14px;
   line-height: 1;
+}
+
+/* Collapsible sections inside drill-down */
+.checklist-drilldown__collapsible { margin-bottom: 12px; }
+.checklist-drilldown__collapsible:last-child { margin-bottom: 0; }
+
+.checklist-drilldown__collapsible-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 2px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: inherit;
+  text-align: left;
+}
+.checklist-drilldown__collapsible-toggle:hover { opacity: 0.7; }
+
+.checklist-drilldown__collapsible-chevron {
+  font-size: 10px;
+  width: 12px;
+  flex-shrink: 0;
+}
+
+.checklist-drilldown__collapsible-body {
+  padding-top: 10px;
 }
 
 .checklist-drilldown__empty {
