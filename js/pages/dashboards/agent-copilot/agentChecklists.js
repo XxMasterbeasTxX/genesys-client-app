@@ -1168,14 +1168,17 @@ export async function render({ route, me, api }) {
 
         playerContainer.innerHTML = "";
         let playableCount = 0;
+        const multiPart = available.length > 1;
 
         // Step 2: fetch each recording individually to obtain the presigned mediaUri
-        for (const stub of available) {
+        for (let i = 0; i < available.length; i++) {
+          const stub = available[i];
           const label = document.createElement("div");
           label.className = "checklist-drilldown__recording-label";
           // list endpoint uses 'media'; single endpoint uses 'mediaType'
           const mediaTypeLabel = stub.media ?? stub.mediaType ?? "";
           const parts = [];
+          if (multiPart) parts.push(`Part ${i + 1}`);
           if (mediaTypeLabel) parts.push(mediaTypeLabel);
           if (stub.durationMilliseconds) parts.push(fmtDuration(stub.durationMilliseconds));
 
