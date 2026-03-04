@@ -556,6 +556,7 @@ export async function render({ route, me, api }) {
     expandedRowId = null;
     conversations = [];
     enriched.clear();
+    expandResults(); // always show table when new search starts
 
     // Cancel any in-flight enrichment from a previous search
     if (enrichAbort) enrichAbort.abort();
@@ -1136,6 +1137,12 @@ export async function render({ route, me, api }) {
     }
   }
 
+  function expandResults() {
+    tableWrap.hidden = false;
+    resultsToggle.setAttribute("aria-expanded", "true");
+    resultsChevron.textContent = "▼";
+  }
+
   function makeCollapsible(title, content, expanded = true) {
     const wrap = document.createElement("div");
     wrap.className = "checklist-drilldown__collapsible";
@@ -1190,123 +1197,123 @@ export async function render({ route, me, api }) {
     hdr.append(h3, closeBtn);
     drillPanel.append(hdr);
 
-    // ── Recording Player ────────────────────────────────
+    // ── Recording Section ────────────────────────────────
     const recSection = document.createElement("div");
     recSection.className = "checklist-drilldown__recording";
 
-    const playBtn = document.createElement("button");
-    playBtn.type = "button";
-    playBtn.className = "btn btn-sm checklist-drilldown__recording-btn";
-    playBtn.textContent = "🎧 Play Recording";
+    // Fetch stubs immediately so we can decide whether to show buttons or a message
+    const recLoading = document.createElement("span");
+    recLoading.className = "checklist-drilldown__recording-msg";
+    recLoading.textContent = "⏳ Loading recordings…";
+    recSection.append(recLoading);
 
-    const playerContainer = document.createElement("div");
-    playerContainer.className = "checklist-drilldown__recording-player";
-
-    playBtn.addEventListener("click", async () => {
-      if (playerContainer.dataset.loaded) return; // already attempted
-      playerContainer.dataset.loaded = "1";
-      playBtn.disabled = true;
-      playBtn.textContent = "⏳ Loading…";
+    (async () => {
       try {
-        // Step 1: list recording stubs (no format/transcode, fast)
         const stubs = await api.getConversationRecordings(convId);
-        console.log(`[Recording] convId=${convId} stubs raw:`, stubs);
-
-        // The API returns a plain array; guard against null/unexpected shapes
         const stubList = Array.isArray(stubs)
           ? stubs
-          : Array.isArray(stubs?.entities)
-            ? stubs.entities
-            : stubs
-              ? [stubs]
-              : [];
-
-        console.log(`[Recording] stubList (${stubList.length}):`, stubList.map((r) => ({
-          id: r.id, fileState: r.fileState, deletedDate: r.deletedDate, media: r.media, mediaType: r.mediaType,
-        })));
-
-        // 'media' is used on the list endpoint; 'mediaType' on single-recording endpoint
-        // Filter only records that have an id and aren't explicitly marked deleted
+          : Array.isArray(stubs?.entities) ? stubs.entities
+          : stubs ? [stubs] : [];
         const available = stubList.filter(
           (r) => r.id && !r.deletedDate && r.fileState !== "DELETED",
         );
-        console.log(`[Recording] available count: ${available.length}`);
+
+        recSection.innerHTML = "";
 
         if (!available.length) {
-          playerContainer.innerHTML =
-            `<span class="checklist-drilldown__recording-msg">No recording available for this interaction.</span>`;
-          playBtn.textContent = "🎧 No Recording";
+          const msg = document.createElement("span");
+          msg.className = "checklist-drilldown__recording-msg";
+          msg.textContent = "No recordings for this interaction.";
+          recSection.append(msg);
           return;
         }
 
-        playerContainer.innerHTML = "";
-        let playableCount = 0;
+        // One button per recording, laid out in a horizontal row
+        const btnRow = document.createElement("div");
+        btnRow.className = "checklist-drilldown__recording-btns";
+
+        const playerArea = document.createElement("div");
+        playerArea.className = "checklist-drilldown__recording-player";
+
         const multiPart = available.length > 1;
 
-        // Step 2: fetch each recording individually to obtain the presigned mediaUri
         for (let i = 0; i < available.length; i++) {
           const stub = available[i];
-          const label = document.createElement("div");
-          label.className = "checklist-drilldown__recording-label";
-          // list endpoint uses 'media'; single endpoint uses 'mediaType'
-          const mediaTypeLabel = stub.media ?? stub.mediaType ?? "";
-          const parts = [];
-          if (multiPart) parts.push(`Part ${i + 1}`);
-          if (mediaTypeLabel) parts.push(mediaTypeLabel);
-          if (stub.durationMilliseconds) parts.push(fmtDuration(stub.durationMilliseconds));
+          const btnLabel = multiPart ? `🎧 Part ${i + 1}` : "🎧 Play Recording";
 
-          if (stub.fileState === "ARCHIVED") {
-            parts.push("Archived — not directly playable");
-            label.textContent = parts.join(" · ");
-            playerContainer.append(label);
-            continue;
-          }
+          const recBtn = document.createElement("button");
+          recBtn.type = "button";
+          recBtn.className = "btn btn-sm checklist-drilldown__recording-btn";
+          recBtn.textContent = btnLabel;
 
-          try {
-            const rec = await api.getConversationRecording(convId, stub.id);
-            console.log(`[Recording] single fetch id=${stub.id}:`, { mediaUris: rec?.mediaUris, fileState: rec?.fileState, media: rec?.media });
-            // Genesys returns mediaUris as a map: { MP3: { mediaUri: "https://..." }, ... }
-            const uri = rec?.mediaUris?.MP3?.mediaUri
-              ?? rec?.mediaUris?.WEBM?.mediaUri
-              ?? rec?.mediaUris?.WAV?.mediaUri
-              ?? Object.values(rec?.mediaUris ?? {})[0]?.mediaUri
-              ?? null;
-            if (!uri) {
-              console.warn(`[Recording] No uri found for recording ${stub.id}. mediaUris:`, rec?.mediaUris, 'Full response:', rec);
-              continue;
+          const playerSlot = document.createElement("div");
+          playerSlot.className = "checklist-drilldown__recording-slot";
+          playerSlot.hidden = true;
+
+          recBtn.addEventListener("click", async () => {
+            // Toggle: if already loaded and visible, hide
+            if (playerSlot.dataset.loaded && !playerSlot.hidden) {
+              playerSlot.hidden = true;
+              recBtn.classList.remove("checklist-drilldown__recording-btn--active");
+              return;
             }
+            // Already loaded but hidden — just show
+            if (playerSlot.dataset.loaded) {
+              playerSlot.hidden = false;
+              recBtn.classList.add("checklist-drilldown__recording-btn--active");
+              return;
+            }
+            // First click — fetch
+            recBtn.disabled = true;
+            recBtn.textContent = "⏳…";
+            playerSlot.dataset.loaded = "1";
+            try {
+              if (stub.fileState === "ARCHIVED") {
+                playerSlot.innerHTML = `<span class="checklist-drilldown__recording-msg">Archived — not directly playable.</span>`;
+              } else {
+                const rec = await api.getConversationRecording(convId, stub.id);
+                const uri = rec?.mediaUris?.MP3?.mediaUri
+                  ?? rec?.mediaUris?.WEBM?.mediaUri
+                  ?? rec?.mediaUris?.WAV?.mediaUri
+                  ?? Object.values(rec?.mediaUris ?? {})[0]?.mediaUri
+                  ?? null;
+                if (!uri) {
+                  playerSlot.innerHTML = `<span class="checklist-drilldown__recording-msg">Recording not yet available (may still be processing).</span>`;
+                } else {
+                  const isScreen = (rec.mediaType ?? rec.media ?? "") === "screen";
+                  const media = document.createElement(isScreen ? "video" : "audio");
+                  media.controls = true;
+                  media.src = uri;
+                  media.className = "checklist-drilldown__recording-media";
+                  playerSlot.append(media);
+                }
+              }
+            } catch (recErr) {
+              delete playerSlot.dataset.loaded;
+              playerSlot.innerHTML =
+                `<span class="checklist-drilldown__recording-msg checklist-drilldown__recording-msg--error">` +
+                `Could not load: ${escapeHtml(recErr.message ?? "Unknown error")}</span>`;
+            }
+            playerSlot.hidden = false;
+            recBtn.classList.add("checklist-drilldown__recording-btn--active");
+            recBtn.textContent = btnLabel;
+            recBtn.disabled = false;
+          });
 
-            label.textContent = parts.join(" · ");
-            const isScreen = (rec.mediaType ?? rec.media ?? "") === "screen";
-            const media = document.createElement(isScreen ? "video" : "audio");
-            media.controls = true;
-            media.src = uri;
-            media.className = "checklist-drilldown__recording-media";
-            playerContainer.append(label, media);
-            playableCount++;
-          } catch (recErr) {
-            console.warn(`[Recording] Could not fetch recording ${stub.id}:`, recErr.message ?? recErr);
-          }
+          btnRow.append(recBtn);
+          playerArea.append(playerSlot);
         }
 
-        if (!playableCount && !playerContainer.children.length) {
-          playerContainer.innerHTML =
-            `<span class="checklist-drilldown__recording-msg">Recording not yet available (may still be processing).</span>`;
-        }
-
-        playBtn.textContent = "🎧 Recording";
-        playBtn.disabled = false;
+        recSection.append(btnRow, playerArea);
       } catch (err) {
-        delete playerContainer.dataset.loaded;
-        playerContainer.innerHTML =
-          `<span class="checklist-drilldown__recording-msg checklist-drilldown__recording-msg--error">` +
-          `Could not load recording: ${escapeHtml(err.message ?? "Unknown error")}</span>`;
-        playBtn.textContent = "🎧 Retry";
-        playBtn.disabled = false;
+        recSection.innerHTML = "";
+        const msg = document.createElement("span");
+        msg.className = "checklist-drilldown__recording-msg checklist-drilldown__recording-msg--error";
+        msg.textContent = `Could not load recordings: ${escapeHtml(err.message ?? "Unknown error")}`;
+        recSection.append(msg);
       }
-    });
+    })();
 
-    recSection.append(playBtn, playerContainer);
     drillPanel.append(makeCollapsible("🎧 Recording", recSection, true));
 
     const checklistsBody = document.createElement("div");

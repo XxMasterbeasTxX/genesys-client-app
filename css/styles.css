@@ -1060,12 +1060,29 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+.checklist-drilldown__recording-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
 .checklist-drilldown__recording-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-size: 12px;
   padding: 4px 12px;
+}
+
+.checklist-drilldown__recording-btn--active {
+  background-color: var(--accent, #d97706);
+  color: #fff;
+  border-color: var(--accent, #d97706);
+}
+
+.checklist-drilldown__recording-slot {
+  margin-top: 6px;
 }
 
 .checklist-drilldown__recording-player {
