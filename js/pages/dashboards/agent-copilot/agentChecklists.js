@@ -1266,21 +1266,26 @@ export async function render({ route, me, api }) {
             // First click — fetch
             recBtn.disabled = true;
             recBtn.textContent = "⏳…";
-            playerSlot.dataset.loaded = "1";
             try {
               if (stub.fileState === "ARCHIVED") {
                 playerSlot.innerHTML = `<span class="checklist-drilldown__recording-msg">Archived — not directly playable.</span>`;
               } else {
-                const rec = await api.getConversationRecording(convId, stub.id);
-                const uri = rec?.mediaUris?.MP3?.mediaUri
+                // Use video format for screen recordings, audio format for voice
+                const isScreenStub = (stub.media ?? stub.mediaType ?? "").toLowerCase() === "screen";
+                const formatId = isScreenStub ? "WEBM" : "MP3";
+                const rec = await api.getConversationRecording(convId, stub.id, formatId);
+                // Try the requested format first, then fall back through all available formats
+                const uri = rec?.mediaUris?.[formatId]?.mediaUri
+                  ?? rec?.mediaUris?.MP3?.mediaUri
                   ?? rec?.mediaUris?.WEBM?.mediaUri
                   ?? rec?.mediaUris?.WAV?.mediaUri
+                  ?? rec?.mediaUri
                   ?? Object.values(rec?.mediaUris ?? {})[0]?.mediaUri
                   ?? null;
                 if (!uri) {
                   playerSlot.innerHTML = `<span class="checklist-drilldown__recording-msg">Recording not yet available (may still be processing).</span>`;
                 } else {
-                  const isScreen = (rec.mediaType ?? rec.media ?? "") === "screen";
+                  const isScreen = isScreenStub || (rec.mediaType ?? rec.media ?? "").toLowerCase() === "screen";
                   const media = document.createElement(isScreen ? "video" : "audio");
                   media.controls = true;
                   media.src = uri;
@@ -1288,11 +1293,12 @@ export async function render({ route, me, api }) {
                   playerSlot.append(media);
                 }
               }
+              playerSlot.dataset.loaded = "1";
             } catch (recErr) {
-              delete playerSlot.dataset.loaded;
               playerSlot.innerHTML =
                 `<span class="checklist-drilldown__recording-msg checklist-drilldown__recording-msg--error">` +
                 `Could not load: ${escapeHtml(recErr.message ?? "Unknown error")}</span>`;
+              playerSlot.dataset.loaded = "1"; // still mark loaded so toggle works
             }
             playerSlot.hidden = false;
             recBtn.classList.add("checklist-drilldown__recording-btn--active");
