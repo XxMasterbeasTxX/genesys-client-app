@@ -601,7 +601,8 @@ Run through these checks after deployment:
   - [ ] Confirm interactions appear and enrich with checklist data
   - [ ] Click a row with a checklist → verify drill-down shows checklist items with separate **Agent** and **AI** tick indicators (green ✓ / red ✗)
   - [ ] Verify the Interaction Detail panel opens with three collapsible sections: **🎧 Recording** (expanded), **Checklists** (expanded), **Conversation Summary** (collapsed)
-  - [ ] Click the **🎧 Play Recording** button → verify the audio player loads and plays the recording; if multiple segments exist, verify they are labelled Part 1, Part 2 etc.
+  - [ ] Click the **🎧 Load Recordings** button → verify it loads stubs and either shows "No recordings for this interaction." or reveals per-segment buttons ("🎧 Play Recording" for single, "🎧 Part 1" / "🎧 Part 2" etc. for multi-part)
+  - [ ] Click a segment button → verify only that recording's audio player appears below the buttons; click again to toggle it off; click another segment to load its player independently
   - [ ] Verify that selecting a row **collapses the search results table** automatically, and closing the detail panel (✕) **re-expands** it
   - [ ] Verify the **▼ Search Results** toggle header collapses/expands the table independently without resetting filters or data
   - [ ] If the conversation has an AI-generated summary, verify it appears below the checklist items in the drill-down panel (showing headline, reason, resolution, followup, full text)
@@ -774,10 +775,10 @@ To embed the app inside the Genesys Cloud client interface:
 - **Cause**: No enriched checklist data yet, or Chart.js not loaded
 - **Fix**: The chart only appears after at least one interaction has been enriched with checklist data. Verify Chart.js loads from the CDN (`cdn.jsdelivr.net/npm/chart.js@4`). Chart styling can be adjusted in `CHART_CONFIG` within `checklistConfig.js`; chart container sizing is in `css/styles.css` (`.checklist-chart-wrap`).
 
-### Agent Checklists — recording shows "No recording available"
+### Agent Checklists — "Load Recordings" shows "No recordings for this interaction."
 
-- **Cause**: The OAuth client lacks `recording:recording:view` permission, or the recording is archived/still processing
-- **Fix**: Ensure the PKCE OAuth client's role includes **Recording** with `recording:recording:view`. For screen recordings, also add `recording:screenRecording:view`. If the recording was recently created it may still be processing — wait a few minutes and try again. Archived recordings cannot be played inline.
+- **Cause**: The OAuth client lacks `recording:recording:view` permission, the recording is archived/deleted, or Genesys hasn't finished indexing it yet.
+- **Fix**: Ensure the PKCE OAuth client's role includes **Recording** with `recording:recording:view`. For screen recordings also add `recording:screenRecording:view`. The button already retries once after 3 seconds automatically; if the message still appears, the recording is either archived or genuinely absent. Archived recordings show "Archived — not directly playable." per segment button.
 
 ### Agent Checklists — conversation summary not showing
 

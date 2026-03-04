@@ -175,7 +175,7 @@ js/
 
 **Genesys permissions required:** Analytics, Conversation, Assistants, Routing, Recording
 
-> The **Recording** permission (`recording:recording:view`) is required for the inline recording playback button in the Interaction Detail drill-down. Add `recording:screenRecording:view` if screen recordings should also be playable. These permissions can be omitted if recording playback is not needed — the button will show an error but will not break any other functionality.
+> The **Recording** permission (`recording:recording:view`) is required by the **\"\ud83c\udfa7 Load Recordings\"** button in the Interaction Detail drill-down. Clicking it fetches stubs and, if recordings are found, renders one button per segment; each segment button lazily loads its own audio player on click. Add `recording:screenRecording:view` if screen recordings should also be playable. These permissions can be omitted if recording playback is not needed — the button will show an error message but will not break any other functionality.
 
 ### Trunks Only
 
