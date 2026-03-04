@@ -1201,35 +1201,40 @@ export async function render({ route, me, api }) {
     const recSection = document.createElement("div");
     recSection.className = "checklist-drilldown__recording";
 
-    // Single trigger button — stubs + individual URIs are fetched on first click,
-    // matching the old working behaviour (user gesture gives Genesys more processing time)
     const loadBtn = document.createElement("button");
     loadBtn.type = "button";
     loadBtn.className = "btn btn-sm checklist-drilldown__recording-btn";
     loadBtn.textContent = "🎧 Load Recordings";
 
-    const playerArea = document.createElement("div");
-    playerArea.className = "checklist-drilldown__recording-player";
+    const fetchStubs = async () => {
+      const stubs = await api.getConversationRecordings(convId);
+      const stubList = Array.isArray(stubs)
+        ? stubs
+        : Array.isArray(stubs?.entities) ? stubs.entities
+        : stubs ? [stubs] : [];
+      return stubList.filter(
+        (r) => r.id && !r.deletedDate && r.fileState !== "DELETED",
+      );
+    };
 
     loadBtn.addEventListener("click", async () => {
       if (loadBtn.dataset.loaded) return;
-      loadBtn.dataset.loaded = "1";
       loadBtn.disabled = true;
       loadBtn.textContent = "⏳ Loading…";
 
       try {
-        // Step 1: fetch stubs (same as old code)
-        const stubs = await api.getConversationRecordings(convId);
-        const stubList = Array.isArray(stubs)
-          ? stubs
-          : Array.isArray(stubs?.entities) ? stubs.entities
-          : stubs ? [stubs] : [];
-        const available = stubList.filter(
-          (r) => r.id && !r.deletedDate && r.fileState !== "DELETED",
-        );
+        // Step 1: fetch stubs; retry once after 3s if Genesys hasn't indexed yet
+        let available = await fetchStubs();
+        if (!available.length) {
+          loadBtn.textContent = "⏳ Retrying…";
+          await new Promise((r) => setTimeout(r, 3000));
+          available = await fetchStubs();
+        }
+
+        // Lock after both attempts so the button can't be clicked again
+        loadBtn.dataset.loaded = "1";
 
         if (!available.length) {
-          // No recordings — replace button with informational text
           recSection.innerHTML = "";
           const msg = document.createElement("span");
           msg.className = "checklist-drilldown__recording-msg";
@@ -1238,14 +1243,16 @@ export async function render({ route, me, api }) {
           return;
         }
 
-        // Recordings found — build per-recording buttons and fetch each URI
+        // Recordings found — clear section and build correct DOM order:
+        // buttons row first, then player slots below
+        recSection.innerHTML = "";
         const multiPart = available.length > 1;
         const btnRow = document.createElement("div");
         btnRow.className = "checklist-drilldown__recording-btns";
+        const playerArea = document.createElement("div");
+        playerArea.className = "checklist-drilldown__recording-player";
 
-        loadBtn.hidden = true; // hide trigger button, replaced by per-recording buttons
-
-        // Step 2: fetch each recording individually (same as old code), one button per recording
+        // Step 2: one button per recording; fetch each URI immediately in parallel
         for (let i = 0; i < available.length; i++) {
           const stub = available[i];
           const btnLabel = multiPart ? `🎧 Part ${i + 1}` : "🎧 Play Recording";
@@ -1253,7 +1260,6 @@ export async function render({ route, me, api }) {
           const recBtn = document.createElement("button");
           recBtn.type = "button";
           recBtn.className = "btn btn-sm checklist-drilldown__recording-btn";
-          recBtn.textContent = btnLabel;
           recBtn.disabled = true;
           recBtn.textContent = "⏳…";
 
@@ -1264,13 +1270,13 @@ export async function render({ route, me, api }) {
           btnRow.append(recBtn);
           playerArea.append(playerSlot);
 
-          // Fetch this recording's URI immediately (mirrors old single-click fetch)
           (async () => {
             try {
               if (stub.fileState === "ARCHIVED") {
                 playerSlot.innerHTML = `<span class="checklist-drilldown__recording-msg">Archived — not directly playable.</span>`;
                 recBtn.textContent = btnLabel;
                 recBtn.disabled = false;
+                playerSlot.hidden = false;
                 return;
               }
               const isScreenStub = (stub.media ?? stub.mediaType ?? "").toLowerCase() === "screen";
@@ -1283,7 +1289,6 @@ export async function render({ route, me, api }) {
                 ?? rec?.mediaUri
                 ?? Object.values(rec?.mediaUris ?? {})[0]?.mediaUri
                 ?? null;
-
               if (!uri) {
                 playerSlot.innerHTML = `<span class="checklist-drilldown__recording-msg">Recording not yet available (may still be processing).</span>`;
                 recBtn.textContent = btnLabel;
@@ -1291,7 +1296,6 @@ export async function render({ route, me, api }) {
                 playerSlot.hidden = false;
                 return;
               }
-
               const isScreen = isScreenStub || (rec.mediaType ?? rec.media ?? "").toLowerCase() === "screen";
               const media = document.createElement(isScreen ? "video" : "audio");
               media.controls = true;
@@ -1313,9 +1317,10 @@ export async function render({ route, me, api }) {
           })();
         }
 
-        recSection.append(btnRow);
+        recSection.append(btnRow, playerArea);
       } catch (err) {
         recSection.innerHTML = "";
+        loadBtn.dataset.loaded = "1";
         const msg = document.createElement("span");
         msg.className = "checklist-drilldown__recording-msg checklist-drilldown__recording-msg--error";
         msg.textContent = `Could not load recordings: ${escapeHtml(err.message ?? "Unknown error")}`;
@@ -1323,7 +1328,7 @@ export async function render({ route, me, api }) {
       }
     });
 
-    recSection.append(loadBtn, playerArea);
+    recSection.append(loadBtn);
 
     drillPanel.append(makeCollapsible("🎧 Recording", recSection, true));
 
